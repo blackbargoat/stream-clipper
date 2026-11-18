@@ -149,7 +149,8 @@ def make_clip(row, src, peak_in_src, t_abs, sc, why, capture_start=None):
     v = upload(out, key + ".mp4", "video/mp4"); th = upload(thumb, key + ".jpg", "image/jpeg")
     rest("POST", "clip_clips?on_conflict=stream_id,t", [{"stream_id": sid, "t": t_abs, "score": round(sc, 2), "why": why, "title": title,
         "transcript": info["transcript"][:4000], "duration": info["duration"], "layout": info["layout"], "video_url": v, "thumb_url": th, "sync": sync,
-        "review_score": rv.get("score") if rv else None, "review": rv, "status": status, "stage": "edited"}],
+        "review_score": rv.get("score") if rv else None, "review": rv, "status": status, "stage": "edited",
+        "src_pos": (row["_pos_base"] + t_abs) if row.get("_pos_base") is not None else None}],
         prefer="resolution=merge-duplicates,return=minimal")
     log(f"  clip {t_abs}s → {title} ({info['duration']}s, {info['layout']}) review {rv.get('score') if rv else '-'} → {status}")
     return v
@@ -183,6 +184,8 @@ def run_live(row, max_minutes):
     if not feed:
         raise RuntimeError("no live feed (stream may have ended)")
     t0 = time.time()
+    if row.get("_release"):  # where capture second 0 sits in the original stream (minus ~12 s of live delay)
+        row["_pos_base"] = max(0, int(t0 - row["_release"]) - 12)
     pcm = os.path.join(WORK, "audio.pcm")  # continuous 16 kHz mono audio: the timeline every moment is measured on
     rc = ["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_on_network_error", "1", "-reconnect_delay_max", "10"]
     ins = [*rc, "-i", feed[0]] + ([*rc, "-i", feed[1]] if len(feed) > 1 else [])
@@ -245,6 +248,7 @@ def run_live(row, max_minutes):
 
 def run_vod(row, n_clips=10):
     sid, url = row["id"], row["url"]
+    row["_pos_base"] = 0  # VOD moments are already stream positions
     os.makedirs(WORK, exist_ok=True)
     heartbeat(sid, status="processing")
     meta = ytdlp_json(url) or {}
@@ -288,6 +292,7 @@ if __name__ == "__main__":
         msg = "YouTube blocked this server. YouTube streams need the home runner (see README)."
         log(msg); rest("PATCH", f"clip_streams?id=eq.{row['id']}", {"status": "waiting_home", "error": msg}, prefer="return=minimal")
         sys.exit(0)
+    row["_release"] = meta.get("release_timestamp") or meta.get("timestamp")
     if meta.get("title") and not row.get("title"):
         rest("PATCH", f"clip_streams?id=eq.{row['id']}", {"title": meta["title"]}, prefer="return=minimal"); row["title"] = meta["title"]
     try:

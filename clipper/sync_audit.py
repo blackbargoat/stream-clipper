@@ -24,7 +24,7 @@ def live_edge(feed):
     """Called when recording starts: remembers the piece-URL templates and the newest piece number."""
     v_url, sq = _first_piece(feed[0])
     a_url, _ = _first_piece(feed[1])
-    return {"v": v_url, "a": a_url, "sq": sq}
+    return {"v": v_url, "a": a_url, "sq": sq, "playlist": feed[0]}
 
 
 def _id3_ts(path):
@@ -69,7 +69,12 @@ def repair(src, early, dst):
 def audit(src, edge, capture_start, work):
     """src = clip source cut from capture second `capture_start`. Returns (src_to_use, trim_seconds, report)."""
     sq_mid = edge["sq"] + int(capture_start // 2)
-    ref = reference(edge, sq_mid - 45, sq_mid + 75, work)
+    newest = sq_mid + 75
+    try:  # live: never ask for pieces that don't exist yet (that was a 404)
+        newest = _first_piece(edge["playlist"])[1] - 1
+    except Exception:  # noqa: BLE001
+        pass
+    ref = reference(edge, sq_mid - 45, min(sq_mid + 75, newest), work)
     m = sync_ref.measure(src, ref)
     report = {"measured_early": m["audio_early"], "match": min(m["video_match"], m["audio_match"])}
     if report["match"] < 0.8:
