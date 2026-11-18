@@ -3,6 +3,8 @@
 # usage: SUPABASE_SERVICE_KEY=... CLIP_WORKER_KEY=... ./run-local.sh <clip_streams id>
 cd "$(dirname "$0")/clipper"
 SID="$1"; export CLIP_WORK="/tmp/clipora/$SID"
+# stopping this script stops everything it started (recorder, chat reader) instead of leaving orphans
+trap 'pkill -TERM -P $$; pkill -f "copyts.*$CLIP_WORK"; exit 0' INT TERM
 while true; do
   rm -rf "$CLIP_WORK/pieces" "$CLIP_WORK/audio.pcm"; mkdir -p "$CLIP_WORK"  # fresh recording each start
   caffeinate -i python3 live.py --stream "$SID" --max-minutes 330

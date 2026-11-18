@@ -218,6 +218,7 @@ def run_live(row, max_minutes):
             wav = os.path.join(WORK, "a.wav"); pcm_to_wav(pcm, wav)
             total, why, n = score(wav, chat_file(chat), t0)
             new = range(max(last_scan, 90), n - 25)
+            log(f"scan to {n // 60}:{n % 60:02d}, best moment score {max((float(total[i]) for i in new), default=0):.1f} (needs {MIN_SCORE})")
             hour_cap = MAX_PER_HOUR * max(1, n / 3600)
             for t in sorted(new, key=lambda i: -total[i]):
                 if total[t] < MIN_SCORE or len(made) >= hour_cap:
@@ -282,6 +283,10 @@ def run_vod(row, n_clips=10):
 
 
 if __name__ == "__main__":
+    import signal
+    # A stop (SIGTERM / Ctrl-C) must run the cleanup in run_live, or the ffmpeg recorder and chat reader keep
+    # running as orphans and the next start ends up with several recorders writing into the same files.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     p = argparse.ArgumentParser(); p.add_argument("--stream", required=True); p.add_argument("--max-minutes", type=float, default=340)
     a = p.parse_args()
     row = stream_row(a.stream)
