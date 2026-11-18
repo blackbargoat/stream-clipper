@@ -157,50 +157,100 @@ def caption_track(words, start, end, y, tmp):
     return lst
 
 
-def render(src, peak, out, title=None, model="base.en", words=None, audio_shift=0.0):
+HERE = os.path.dirname(os.path.abspath(__file__))
+WHOOSH = os.path.join(HERE, "sfx", "whoosh.wav")  # same whoosh the Joe Bart editor used
+
+
+def loudness(src, a, b, step=0.1):
+    """Per-step dB of the source audio between a and b (seconds)."""
+    import numpy as np
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(a), "-to", str(b), "-i", src, "-vn", "-ac", "1", "-ar", "16000", "-f", "s16le", "-"],
+                         capture_output=True, check=True).stdout
+    x = np.frombuffer(raw, np.int16).astype(np.float32)
+    n = int(16000 * step); k = len(x) // n
+    return 20 * np.log10(np.sqrt((x[: k * n].reshape(k, n) ** 2).mean(axis=1) + 1)) if k else np.zeros(0)
+
+
+def pick_hook(src, words, start, end, lo=2.0, hi=4.0):
+    """Cold open: the loudest ~3 s of the clip (the reaction), snapped to whole words. None if that moment is
+    already at the very start (then the clip opens on it anyway)."""
+    import numpy as np
+    db = loudness(src, start, end)
+    if len(db) < 60:
+        return None
+    w = 30  # 3 s windows at 0.1 s
+    score = np.convolve(db, np.ones(w) / w, "valid")
+    i = int(np.argmax(score))
+    hs, he = start + i * 0.1, start + (i + w) * 0.1
+    if hs - start < 4.0:
+        return None
+    inside = [x for x in words if x["end"] > hs - 0.6 and x["start"] < he + 0.6]
+    if inside:  # never cut inside a word
+        hs = min(hs, inside[0]["start"]) - 0.05
+        he = max(he, inside[-1]["end"]) + 0.08
+    if he - hs > hi:
+        he = hs + hi
+        cut = [x for x in words if x["end"] <= he]
+        if cut:
+            he = cut[-1]["end"] + 0.08
+    if he - hs < lo:
+        return None
+    return round(hs, 2), round(he, 2)
+
+
+def render(src, peak, out, title=None, model="base.en", words=None, audio_shift=0.0, hook=True):
     sw, sh_, dur = probe(src)
     words = words if words is not None else transcribe(src, model)
     start, end = pick_cut(words, peak, dur)
     cam = find_cam(src, sw, sh_, dur)
+    hk = pick_hook(src, words, start, end) if hook else None
     split = 0.38
+    # timeline: [hook] + whoosh + main clip. Video and audio are trimmed from the full source so both match.
+    off = float(audio_shift or 0.0)  # audio late (+) / early (-) in this source; 0 for anything recorded after the sync fix
+    parts = ([hk] if hk else []) + [(start, end)]
+    n = len(parts)
+    vparts = f"[0:v]split={n}" + "".join(f"[vs{i}]" for i in range(n)) + ";" + "".join(f"[vs{i}]trim={a:.3f}:{b:.3f},setpts=PTS-STARTPTS[v{i}];" for i, (a, b) in enumerate(parts))
+    aparts = f"[1:a]asplit={n}" + "".join(f"[as{i}]" for i in range(n)) + ";" + "".join(f"[as{i}]atrim={max(0, a + off):.3f}:{max(0, b + off):.3f},asetpts=PTS-STARTPTS[a{i}];" for i, (a, b) in enumerate(parts))
+    pre = vparts + aparts + "".join(f"[v{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=0[src];" + "".join(f"[a{i}]" for i in range(n)) + f"concat=n={n}:v=0:a=1[acat];"
     if cam and cam[0] != "face":
         x, y, bw, bh = cam
         ch = int(H * split) // 2 * 2  # even, or the encoder refuses the frame
-        # gameplay: crop the frame to the bottom area's aspect, centred, avoiding the cam box where possible
         gh = H - ch
         gw_src = int(sh_ * W / gh)
         gx = int(min(max((sw - gw_src) / 2, 0), sw - gw_src))
-        vf = (f"[0:v]split[c][g];[c]crop={bw}:{bh}:{x}:{y},hqdn3d=2:1.5:3:3,scale={W}:{ch}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{ch},unsharp=5:5:0.8:3:3:0.3[cam];"
+        vf = (f"[src]split[c][g];[c]crop={bw}:{bh}:{x}:{y},hqdn3d=2:1.5:3:3,scale={W}:{ch}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{ch},unsharp=5:5:0.8:3:3:0.3[cam];"
               f"[g]crop={gw_src}:{sh_}:{gx}:0,scale={W}:{gh}:flags=lanczos[game];[cam][game]vstack")
-        cap_y = ch + 230
         layout = "cam+game"
     else:
         cw = int(sh_ * W / H)
         cx = cam[1] if cam else sw / 2
         x = int(min(max(cx - cw / 2, 0), sw - cw))
-        vf = f"[0:v]crop={cw}:{sh_}:{x}:0,scale={W}:{H}:flags=lanczos"
-        cap_y = int(H * 0.68)
+        vf = f"[src]crop={cw}:{sh_}:{x}:0,scale={W}:{H}:flags=lanczos"
         layout = "vertical"
     tmp = tempfile.mkdtemp()
-    # audio_shift: seconds the audio is late (+) or early (-) in this source. The live recorder keeps both feeds
-    # on the stream clock, so it is normally 0; it is only set to repair clips recorded before that fix.
-    off = float(audio_shift or 0.0)
-    a0 = max(0.0, start + off)
-    inputs = ["-ss", str(start), "-to", str(end), "-i", src, "-ss", str(a0), "-to", str(a0 + (end - start)), "-i", src]
+    inputs = ["-i", src, "-i", src]; n_in = 2
     vf += ",fps=30"
     if title:
-        # white title box (Joe Bart style), drawn as a transparent PNG so emoji render; sits on the seam or near the top
+        # white title box (Joe Bart style), drawn as a transparent PNG so emoji render; on the seam or near the top
         png = os.path.join(tmp, "title.png")
         seam = int(H * split) // 2 * 2 if layout == "cam+game" else 260
-        sh([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "make_title.py"), title, png, str(seam)])
-        inputs += ["-i", png]
-        vf += "[base];[base][2:v]overlay=0:0:format=auto"
+        sh([sys.executable, os.path.join(HERE, "make_title.py"), title, png, str(seam)])
+        inputs += ["-loop", "1", "-i", png]; n_in += 1
+        vf += f"[base];[base][{n_in - 1}:v]overlay=0:0:format=auto:shortest=1"
     vf += ",format=yuv420p[v]"
-    sh(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", vf, "-map", "[v]", "-map", "1:a",
-        "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-maxrate", "6.4M", "-bufsize", "12M", "-c:a", "aac", "-b:a", "192k",
+    af = "[acat]"
+    if hk and os.path.exists(WHOOSH):
+        inputs += ["-i", WHOOSH]; n_in += 1
+        at = max(0, (hk[1] - hk[0]) - 0.32)  # whoosh lands on the cut from the hook into the clip
+        af = f"[{n_in - 1}:a]adelay={int(at * 1000)}:all=1,volume=0.9[wh];[acat][wh]amix=inputs=2:duration=first:normalize=0"
+    graph = pre + vf + ";" + af + ",loudnorm=I=-14:TP=-1.5:LRA=11[aout]"
+    sh(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", graph, "-map", "[v]", "-map", "[aout]",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-maxrate", "6.4M", "-bufsize", "12M", "-c:a", "aac", "-b:a", "192k",
         "-ar", "48000", "-movflags", "+faststart", out])
     text = " ".join(w["text"] for w in words if start <= w["start"] <= end)
-    return {"start": start, "end": end, "duration": round(end - start, 1), "layout": layout, "audio_shift": off, "cam": cam if cam and cam[0] != "face" else None, "transcript": text}
+    total = (end - start) + ((hk[1] - hk[0]) if hk else 0)
+    return {"start": start, "end": end, "hook": hk, "duration": round(total, 1), "layout": layout, "audio_shift": off,
+            "cam": cam if cam and cam[0] != "face" else None, "transcript": text}
 
 
 if __name__ == "__main__":
