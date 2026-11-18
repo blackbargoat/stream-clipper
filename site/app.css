@@ -289,3 +289,6 @@ button{font:inherit;color:inherit}
 .card .meta .st[data-s="skipped"] i{background:rgba(11,21,48,.2)}
 .empty{grid-column:1/-1;padding:44px 16px;text-align:center;color:var(--ink2);font-size:14px;border-radius:38px}
 .count .big{min-width:1ch}
+
+/* calmer: no pointer spotlight on glass */
+.glass::after{display:none}

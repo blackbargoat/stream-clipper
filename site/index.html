@@ -8,7 +8,7 @@
 <link rel="icon" href="refs/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="app.css?v=2">
+<link rel="stylesheet" href="app.css?v=3">
 </head>
 <body>
 <div class="orbs" aria-hidden="true"><i class="o1"></i><i class="o2"></i><i class="o3"></i></div>
@@ -124,9 +124,8 @@ function tilt(nodes) {
   nodes.forEach((n) => {
     const cur = { x: .5, y: .5, lift: 0 }, tgt = { x: .5, y: .5, lift: 0 }; let raf = 0;
     const step = () => {
-      const k = .12; cur.x += (tgt.x - cur.x) * k; cur.y += (tgt.y - cur.y) * k; cur.lift += (tgt.lift - cur.lift) * k;
-      n.style.transform = `perspective(1100px) rotateX(${(.5 - cur.y) * 5 * cur.lift}deg) rotateY(${(cur.x - .5) * 6 * cur.lift}deg) translateY(${-4 * cur.lift}px) scale(${1 + .012 * cur.lift})`;
-      n.style.setProperty("--mx", cur.x * 100 + "%"); n.style.setProperty("--my", cur.y * 100 + "%");
+      const k = .08; cur.x += (tgt.x - cur.x) * k; cur.y += (tgt.y - cur.y) * k; cur.lift += (tgt.lift - cur.lift) * k;
+      n.style.transform = `perspective(1400px) rotateX(${(.5 - cur.y) * 1.6 * cur.lift}deg) rotateY(${(cur.x - .5) * 2 * cur.lift}deg) translateY(${-2 * cur.lift}px)`;
       const done = Math.abs(tgt.x - cur.x) + Math.abs(tgt.y - cur.y) + Math.abs(tgt.lift - cur.lift) < .002;
       raf = done ? 0 : requestAnimationFrame(step); if (done && !tgt.lift) n.style.transform = "";
     };
@@ -256,7 +255,7 @@ $("#addStream").onclick = async () => {
   try { await call("stream", { url: u }); $("#url").value = ""; $("#addNote").textContent = "Clipping it. First clips land in about 10 minutes."; load(); }
   catch (err) { $("#addNote").textContent = err.message === "paste a YouTube or Twitch link" ? "That isn't a YouTube or Twitch link." : "Didn't save, try again."; }
 };
-tilt(document.querySelectorAll(".count,.pipeline,.live"));
+
 load();
 setInterval(() => { if (!document.hidden) load(); }, 30000);
 setInterval(tick, 1000);
