@@ -137,8 +137,7 @@ def make_clip(row, src, peak_in_src, t_abs, sc, why, capture_start=None):
     title = title_for(text, who, row.get("title"))
     # Review: is it worth keeping? Clips under KEEP_SCORE go to Skipped (you can bring them back on the site).
     rv = review_for(text, title, who, row.get("title"), sc)
-    if rv and rv.get("better_title"):
-        title = rv["better_title"]
+    # The reviewer's better_title is only a suggestion shown on the site: it once renamed "Lucia" to "Lucy".
     settings = {r["key"]: r["value"] for r in (rest("GET", "clip_settings?select=key,value") or [])}
     keep = (rv is None) or (rv.get("keep") and float(rv.get("score", 0)) >= KEEP_SCORE)
     status = "skipped" if not keep else ("approved" if settings.get("auto_approve") is True and float(rv.get("score", 0)) >= AUTO_APPROVE_SCORE else "ready")
