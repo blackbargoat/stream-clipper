@@ -10,6 +10,7 @@
 4. Word-by-word captions (spoken word in yellow) on the seam, optional white title box at the top,
    audio leveled to -14 LUFS. One encode, H.264 CRF 18, 30 fps.
 """
+LAST_FACE = None
 import argparse, json, os, subprocess, sys, tempfile
 import numpy as np
 
@@ -89,6 +90,8 @@ def find_cam(src, sw, sh_, dur):
     if best_n < max(4, len(frames) // 3):
         return None
     cx, cy, fw = best
+    global LAST_FACE
+    LAST_FACE = (cx, cy, fw)
     if fw > sh_ * 0.22:  # a big face = the camera is the whole frame (IRL)
         return ("face", cx)
     aspect = W / (H * 0.38)  # the top area's shape, so nothing squashes
@@ -154,7 +157,7 @@ def caption_track(words, start, end, y, tmp):
     return lst
 
 
-def render(src, peak, out, title=None, model="base.en", words=None):
+def render(src, peak, out, title=None, model="base.en", words=None, audio_shift=0.0):
     sw, sh_, dur = probe(src)
     words = words if words is not None else transcribe(src, model)
     start, end = pick_cut(words, peak, dur)
@@ -179,7 +182,11 @@ def render(src, peak, out, title=None, model="base.en", words=None):
         cap_y = int(H * 0.68)
         layout = "vertical"
     tmp = tempfile.mkdtemp()
-    inputs = ["-ss", str(start), "-to", str(end), "-i", src]
+    # audio_shift: seconds the audio is late (+) or early (-) in this source. The live recorder keeps both feeds
+    # on the stream clock, so it is normally 0; it is only set to repair clips recorded before that fix.
+    off = float(audio_shift or 0.0)
+    a0 = max(0.0, start + off)
+    inputs = ["-ss", str(start), "-to", str(end), "-i", src, "-ss", str(a0), "-to", str(a0 + (end - start)), "-i", src]
     vf += ",fps=30"
     if title:
         # white title box (Joe Bart style), drawn as a transparent PNG so emoji render; sits on the seam or near the top
@@ -187,19 +194,19 @@ def render(src, peak, out, title=None, model="base.en", words=None):
         seam = int(H * split) // 2 * 2 if layout == "cam+game" else 260
         sh([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "make_title.py"), title, png, str(seam)])
         inputs += ["-i", png]
-        vf += "[base];[base][1:v]overlay=0:0:format=auto"
+        vf += "[base];[base][2:v]overlay=0:0:format=auto"
     vf += ",format=yuv420p[v]"
-    sh(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", vf, "-map", "[v]", "-map", "0:a",
+    sh(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", vf, "-map", "[v]", "-map", "1:a",
         "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-maxrate", "6.4M", "-bufsize", "12M", "-c:a", "aac", "-b:a", "192k",
         "-ar", "48000", "-movflags", "+faststart", out])
     text = " ".join(w["text"] for w in words if start <= w["start"] <= end)
-    return {"start": start, "end": end, "duration": round(end - start, 1), "layout": layout, "cam": cam if cam and cam[0] != "face" else None, "transcript": text}
+    return {"start": start, "end": end, "duration": round(end - start, 1), "layout": layout, "audio_shift": off, "cam": cam if cam and cam[0] != "face" else None, "transcript": text}
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--src", required=True); p.add_argument("--peak", type=float, required=True); p.add_argument("--out", required=True)
-    p.add_argument("--title"); p.add_argument("--model", default="base.en"); p.add_argument("--words-out")
+    p.add_argument("--title"); p.add_argument("--model", default="base.en"); p.add_argument("--audio-shift", type=float, default=0.0); p.add_argument("--words-out")
     a = p.parse_args()
-    info = render(a.src, a.peak, a.out, a.title, a.model)
+    info = render(a.src, a.peak, a.out, a.title, a.model, audio_shift=a.audio_shift)
     print(json.dumps(info, indent=1))

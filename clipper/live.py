@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import log, rest, upload, title_for, ytdlp_json  # noqa: E402
 import find_moments as fm  # noqa: E402
 import render as rd  # noqa: E402
+import sync_audit  # noqa: E402
 
 WORK = os.environ.get("CLIP_WORK", "/tmp/clipwork")
 SEG = 60
@@ -114,8 +115,18 @@ def cut(pieces_dir, a, b, dst):
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-c:a", "aac", "-b:a", "192k", dst], check=True)
 
 
-def make_clip(row, src, peak_in_src, t_abs, sc, why):
+def make_clip(row, src, peak_in_src, t_abs, sc, why, capture_start=None):
     sid = row["id"]; who = (row.get("clip_sources") or {}).get("name") or "streamer"
+    sync = None
+    if row.get("_edge") and capture_start is not None:  # YouTube: verify lip sync against YouTube's own copy
+        try:
+            src, trim, sync = sync_audit.audit(src, row["_edge"], capture_start, os.path.join(WORK, f"ref_{t_abs}"))
+            peak_in_src -= trim
+            log(f"  sync {t_abs}s: {sync}")
+            if sync["status"] == "still off":
+                log(f"  skip {t_abs}s: lip sync could not be repaired"); return None
+        except Exception as e:  # noqa: BLE001
+            sync = {"status": "unverified", "error": str(e)[:120]}; log(f"  sync check failed: {e}")
     words = rd.transcribe(src, os.environ.get("CLIP_WHISPER", "base.en"))
     start, end = rd.pick_cut(words, peak_in_src, rd.probe(src)[2])
     text = " ".join(w["text"] for w in words if start <= w["start"] <= end)
@@ -129,10 +140,28 @@ def make_clip(row, src, peak_in_src, t_abs, sc, why):
     key = f"{sid[:8]}/{t_abs}"
     v = upload(out, key + ".mp4", "video/mp4"); th = upload(thumb, key + ".jpg", "image/jpeg")
     rest("POST", "clip_clips?on_conflict=stream_id,t", [{"stream_id": sid, "t": t_abs, "score": round(sc, 2), "why": why, "title": title,
-        "transcript": info["transcript"][:4000], "duration": info["duration"], "layout": info["layout"], "video_url": v, "thumb_url": th}],
+        "transcript": info["transcript"][:4000], "duration": info["duration"], "layout": info["layout"], "video_url": v, "thumb_url": th, "sync": sync}],
         prefer="resolution=merge-duplicates,return=minimal")
     log(f"  clip {t_abs}s → {title} ({info['duration']}s, {info['layout']})")
     return v
+
+
+def feed_gap(logf, two_feeds, wait=90):
+    """Seconds between the video feed's start and the audio feed's start, read from ffmpeg's 'Input #N ... start:' lines."""
+    if not two_feeds:
+        return 0.0
+    t_end = time.time() + wait
+    while time.time() < t_end:
+        txt = open(logf, errors="ignore").read()
+        st = {}
+        for m in re.finditer(r"Input #(\d+),.*?start: ([\d.]+)", txt, re.S):
+            st[int(m.group(1))] = float(m.group(2))
+        if 0 in st and 1 in st:
+            g = st[1] - st[0]
+            return g if abs(g) < 30 else 0.0
+        time.sleep(2)
+    log("couldn't read feed start times; assuming no gap")
+    return 0.0
 
 
 def run_live(row, max_minutes):
@@ -149,10 +178,21 @@ def run_live(row, max_minutes):
     rc = ["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_on_network_error", "1", "-reconnect_delay_max", "10"]
     ins = [*rc, "-i", feed[0]] + ([*rc, "-i", feed[1]] if len(feed) > 1 else [])
     a_in = "1:a:0" if len(feed) > 1 else "0:a:0"
-    rec = subprocess.Popen(["ffmpeg", "-v", "error", "-y", *ins,
+    # YouTube's video and audio feeds start at different points on the stream clock (about 2 s apart). -copyts keeps
+    # that clock in the video pieces so voice and lips stay together. The audio timeline (audio.pcm) starts when the
+    # audio feed starts, so its second 0 sits `gap` seconds into the video; every cut adds the gap back.
+    flog = open(os.path.join(WORK, "ffmpeg.log"), "w")
+    rec = subprocess.Popen(["ffmpeg", "-hide_banner", "-v", "info", "-nostats", "-y", "-copyts", *ins,
                             "-map", "0:v:0", "-map", a_in, "-c", "copy", "-f", "segment", "-segment_time", str(SEG),
                             "-reset_timestamps", "1", os.path.join(pdir, "p%05d.ts"),
-                            "-map", a_in, "-ac", "1", "-ar", "16000", "-f", "s16le", pcm])
+                            "-map", a_in, "-ac", "1", "-ar", "16000", "-f", "s16le", pcm], stderr=flog)
+    gap = feed_gap(os.path.join(WORK, "ffmpeg.log"), len(feed) > 1)
+    if len(feed) > 1 and "googlevideo" in feed[0]:
+        try:
+            row["_edge"] = sync_audit.live_edge(feed)
+        except Exception as e:  # noqa: BLE001
+            log("no YouTube piece numbers, sync audit off:", e)
+    log(f"audio starts {gap:+.3f}s after video on the stream clock")
     stop = threading.Event(); chat = os.path.join(WORK, "chat.jsonl")
     cp = start_chat(src.get("platform"), src.get("handle", ""), url, chat, stop)
     heartbeat(sid, status="capturing")
@@ -175,8 +215,8 @@ def run_live(row, max_minutes):
                 a, b = max(0, t - 40), min(n - 1, t + 25)
                 clip_src = os.path.join(WORK, f"src_{t}.mp4")
                 try:
-                    cut(pdir, a, b, clip_src)
-                    if make_clip(row, clip_src, t - a, t, float(total[t]), [k for k, s in why.items() if s[t] > 1.5] or ["audio"]):
+                    cut(pdir, a + gap, b + gap, clip_src)
+                    if make_clip(row, clip_src, t - a, t, float(total[t]), [k for k, s in why.items() if s[t] > 1.5] or ["audio"], capture_start=a + gap):
                         made.append(t)
                 except Exception as e:  # noqa: BLE001
                     log(f"  clip at {t}s failed: {e}")

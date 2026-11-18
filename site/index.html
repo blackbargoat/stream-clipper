@@ -3,26 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Clip Desk</title>
+<title>Clipora</title>
 <meta name="robots" content="noindex">
-<link rel="icon" href="refs/favicon.png">
+<link rel="icon" href="refs/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="app.css?v=3">
+<link rel="stylesheet" href="app.css?v=5">
 </head>
 <body>
-<div class="orbs" aria-hidden="true"><i class="o1"></i><i class="o2"></i><i class="o3"></i></div>
+<div class="bg" aria-hidden="true"></div>
 
 <header class="top glass">
-  <div class="brand"><img class="mark" src="refs/mark.png" alt=""><b>Clip Desk</b></div>
+  <div class="brand"><img class="mark" src="refs/logo.svg" alt=""><b>Clipora</b></div>
   <div class="viewtog" id="tabs" role="tablist">
-    <button type="button" data-f="ready" aria-pressed="true">New</button>
-    <button type="button" data-f="approved" aria-pressed="false">To post</button>
+    <button type="button" data-f="ready" aria-pressed="true">Needs your OK</button>
+    <button type="button" data-f="approved" aria-pressed="false">Approved</button>
     <button type="button" data-f="posted" aria-pressed="false">Posted</button>
     <button type="button" data-f="skipped" aria-pressed="false">Skipped</button>
   </div>
   <div style="flex:1"></div>
   <div class="top-actions">
+    <button class="btn ghost" id="openConn" style="padding:10px 14px"><svg viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M11 6l1-1a4 4 0 0 1 6 6l-1 1M13 18l-1 1a4 4 0 0 1-6-6l1-1"/></svg><span>Connections</span></button>
     <button class="btn ghost icon" id="openAdd" aria-label="Creators and links"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
   </div>
 </header>
@@ -41,16 +42,13 @@
     </div>
   </section>
 
-  <section class="live glass" aria-label="Live stream">
-    <div class="screen" id="screen">
-      <div class="off" id="off"><b>Nobody you watch is live</b><span>When someone goes live, the stream plays here while it gets clipped.</span></div>
-    </div>
-    <div class="live-side">
+  <section class="live glass" aria-label="Live streams">
+    <div class="live-head">
       <div class="chips" style="padding-right:0" id="liveChips"><span class="chip">Watching</span></div>
-      <h2 id="streamTitle">Waiting for a live stream</h2>
-      <div class="creators" id="switch"></div>
-      <div class="stage"><span><em>Next scan</em><b class="mono" id="sNext">-</b></span><div class="bar"><i id="scanBar" style="width:0"></i></div></div>
-      <p>Every 4 minutes the clipper scores the newest stretch of the stream for loud reactions and chat spikes, then cuts the best moments into Shorts.</p>
+      <p>Each stream gets scanned every 4 minutes for loud reactions and chat spikes. Up to 3 at once.</p>
+    </div>
+    <div class="multi" id="multi" data-n="0">
+      <div class="screen off-tile" id="off"><div class="off"><b>Nobody you watch is live</b><span>When someone goes live, their stream plays here while it gets clipped.</span></div></div>
     </div>
   </section>
 
@@ -95,6 +93,19 @@
   </div>
 </section>
 
+<!-- connections -->
+<section class="sheet glass small" id="connSheet" hidden role="dialog" aria-modal="true" aria-labelledby="connTitle">
+  <button class="btn ghost icon close" id="closeConn" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  <div class="sheet-body">
+    <h2 id="connTitle">Connections</h2>
+    <p class="note" style="font-size:13px">Clipora posts through Buffer. Turn on Auto-post and every clip you approve goes out on that account by itself.</p>
+    <div class="conn" id="chanList"></div>
+    <a class="btn glass-btn" href="https://publish.buffer.com/channels/connect" target="_blank" rel="noopener" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Connect TikTok, Instagram or another account</span></a>
+    <div class="conn"><div><span style="display:grid;gap:2px"><span>Auto-approve</span><em>Skip review: every clip posts without you tapping Post</em></span><button class="tog" type="button" id="autoApprove" aria-pressed="false">Off</button></div></div>
+    <p class="note" id="connNote"></p>
+  </div>
+</section>
+
 <div class="toast glass" id="toast" hidden></div>
 
 <script>
@@ -116,7 +127,7 @@ const bucket = (c) => c.status === "scheduled" ? "posted" : c.status;
 const isLive = (s) => ["live", "capturing"].includes(s.status);
 const srcOf = (s) => (s && D.sources.find((x) => x.id === s.source_id)) || null;
 const streamOf = (c) => D.streams.find((s) => s.id === c.stream_id);
-const LABEL = { ready: "New", approved: "To post", posted: "Posted", skipped: "Skipped" };
+const LABEL = { ready: "Needs OK", approved: "Approved", posted: "Posted", skipped: "Skipped" };
 
 /* 3D tilt + moving specular, same as Studio */
 function tilt(nodes) {
@@ -149,43 +160,53 @@ function renderHero() {
   const live = D.streams.filter(isLive);
   const n = D.clips.filter((c) => bucket(c) === F).length;
   $("#bigCount").textContent = n;
-  $("#bigUnit").textContent = { ready: "new clips", approved: "to post", posted: "posted", skipped: "skipped" }[F];
+  $("#bigUnit").textContent = { ready: "need your OK", approved: "approved", posted: "posted", skipped: "skipped" }[F];
   $("#bigSub").textContent = live.length ? `clipping ${live.map((s) => srcOf(s)?.name || "a stream").join(", ")} live` : "nobody live right now";
   const today = D.clips.filter((c) => Date.now() - Date.parse(c.created_at) < 864e5).length;
-  const post = D.clips.filter((c) => bucket(c) === "approved").length, done = D.clips.filter((c) => bucket(c) === "posted").length, waiting = D.clips.filter((c) => bucket(c) === "ready").length;
-  const max = Math.max(1, today, waiting, post, done);
-  $("#pipeline").innerHTML = [["Clipped today", today], ["Waiting on you", waiting], ["To post", post], ["Posted", done]]
-    .map(([k, v]) => `<div class="stage"><span><em>${k}</em><b>${v}</b></span><div class="bar"><i style="width:${(100 * v / max).toFixed(0)}%"></i></div></div>`).join("");
+  const cnt = (k) => D.clips.filter((c) => bucket(c) === k).length;
+  const rows = [["Clipped today", today, null], ["Needs your OK", cnt("ready"), "ready"], ["Approved, posting next", cnt("approved"), "approved"], ["Posted", cnt("posted"), "posted"]];
+  const max = Math.max(1, ...rows.map((r) => r[1]));
+  $("#pipeline").innerHTML = rows.map(([k, v, go]) => `<${go ? `button type="button" data-go="${go}"` : "div"} class="stage ${go === F ? "here" : ""}"><span><em>${k}</em><b>${v}</b></span><div class="bar"><i style="width:${(100 * v / max).toFixed(0)}%"></i></div></${go ? "button" : "div"}>`).join("");
 }
 function renderLive() {
-  const live = D.streams.filter(isLive);
-  if (!live.find((s) => s.id === watching)) watching = live[0]?.id || null;
-  const s = live.find((x) => x.id === watching), screen = $("#screen");
-  $("#switch").innerHTML = live.length > 1 ? live.map((x) => `<button class="tog" data-w="${esc(x.id)}" aria-pressed="${x.id === watching}">${esc(srcOf(x)?.name || "stream")}</button>`).join("") : "";
-  if (!s) {
-    screen.querySelector("iframe")?.remove(); screen.querySelector(".badge")?.remove(); embedded = null;
-    $("#off").hidden = false; $("#liveChips").innerHTML = `<span class="chip">Watching</span>`; $("#streamTitle").textContent = "Waiting for a live stream";
-    $("#sNext").textContent = "-"; $("#scanBar").style.width = "0"; return;
+  const live = D.streams.filter(isLive).slice(0, 3);
+  const shown = live.filter((s) => !hiddenTiles.has(s.id)), hid = live.length - shown.length;
+  const multi = $("#multi");
+  multi.dataset.n = shown.length;
+  $("#off").hidden = shown.length > 0;
+  if (!live.length) $("#off").querySelector("b").textContent = "Nobody you watch is live";
+  else if (!shown.length) $("#off").querySelector("b").textContent = "All live streams are closed";
+  // remove tiles that are gone or closed, keep the ones still playing (no reload)
+  multi.querySelectorAll(".tile").forEach((t) => { if (!shown.find((s) => s.id === t.dataset.id)) t.remove(); });
+  for (const s of shown) {
+    let t = multi.querySelector(`.tile[data-id="${s.id}"]`);
+    if (!t) {
+      const u = embedUrl(s.url), who = esc(srcOf(s)?.name || "Live");
+      multi.insertAdjacentHTML("beforeend", `<div class="tile" data-id="${esc(s.id)}">
+        <div class="screen"><div class="badge"><span class="pill blue">Live</span><span class="pill">${who}</span></div>
+          <button class="btn icon close-tile" data-hide="${esc(s.id)}" aria-label="Close ${who}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          ${u ? `<iframe src="${esc(u)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${who} live"></iframe>` : `<div class="off"><b>Can't show this stream here</b></div>`}</div>
+        <div class="tile-info"><b class="t-title"></b><div class="stage"><span><em class="t-stats"></em><b class="mono t-next">-</b></span><div class="bar"><i class="t-bar" style="width:0"></i></div></div></div></div>`);
+      t = multi.lastElementChild;
+    }
+    const found = D.clips.filter((c) => c.stream_id === s.id).length;
+    t.querySelector(".t-title").textContent = s.title || s.url;
+    t.querySelector(".t-stats").textContent = `${tc(s.checked_to)} scanned · ${found} clip${found === 1 ? "" : "s"} · next scan`;
   }
-  const u = embedUrl(s.url);
-  if (u && embedded !== u) {
-    screen.querySelector("iframe")?.remove(); screen.querySelector(".badge")?.remove();
-    screen.insertAdjacentHTML("beforeend", `<div class="badge"><span class="pill blue">Live</span><span class="pill">${esc(srcOf(s)?.name || "")}</span></div><iframe src="${esc(u)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="Live stream"></iframe>`);
-    embedded = u;
-  }
-  $("#off").hidden = !!u;
-  const found = D.clips.filter((c) => c.stream_id === s.id).length;
-  $("#liveChips").innerHTML = `<span class="chip trial">${esc(srcOf(s)?.name || "Live")}</span><span class="chip mono">${tc(s.checked_to)} scanned</span><span class="chip">${found} clip${found === 1 ? "" : "s"}</span>`;
-  $("#streamTitle").textContent = s.title || s.url;
+  $("#liveChips").innerHTML = live.length
+    ? live.map((s) => `<span class="chip ${hiddenTiles.has(s.id) ? "" : "trial"}">${esc(srcOf(s)?.name || "Live")}</span>`).join("") + (hid ? `<button class="chip" id="showAll" type="button" style="border:0;cursor:pointer">Show ${hid} closed</button>` : "")
+    : `<span class="chip">Watching ${D.sources.filter((x) => x.enabled !== false).length} creator${D.sources.filter((x) => x.enabled !== false).length === 1 ? "" : "s"}</span>`;
   tick();
 }
 function tick() {
-  const s = D.streams.find((x) => x.id === watching && isLive(x));
-  if (!s) return;
-  if (!s.runner_seen_at) { $("#sNext").textContent = "starting"; return; }
-  const since = (Date.now() - Date.parse(s.runner_seen_at)) / 1000, left = Math.max(0, SCAN_EVERY - (since % SCAN_EVERY));
-  $("#sNext").textContent = since > SCAN_EVERY * 3 ? "reconnecting" : `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")}`;
-  $("#scanBar").style.width = (100 * (1 - left / SCAN_EVERY)).toFixed(1) + "%";
+  document.querySelectorAll("#multi .tile").forEach((t) => {
+    const s = D.streams.find((x) => x.id === t.dataset.id); if (!s) return;
+    const nx = t.querySelector(".t-next"), bar = t.querySelector(".t-bar");
+    if (!s.runner_seen_at) { nx.textContent = "starting"; return; }
+    const since = (Date.now() - Date.parse(s.runner_seen_at)) / 1000, left = Math.max(0, SCAN_EVERY - (since % SCAN_EVERY));
+    nx.textContent = since > SCAN_EVERY * 3 ? "reconnecting" : `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")}`;
+    bar.style.width = (100 * (1 - left / SCAN_EVERY)).toFixed(1) + "%";
+  });
 }
 function renderSlots() {
   const list = D.clips.filter((c) => bucket(c) === F);
@@ -195,13 +216,16 @@ function renderSlots() {
       <div class="thumb"><img src="${esc(c.thumb_url)}?v=${Date.parse(c.created_at) || 0}" alt="" loading="lazy">
         <div class="badge"><span class="pill ${b === "approved" ? "blue" : ""}">${LABEL[b]}</span></div><span class="pill time mono">${Number(c.duration || 0).toFixed(0)}s</span></div>
       <h3>${esc(c.title)}</h3>
-      <div class="meta"><span>${esc(who)} · ${tc(c.t)}</span><span class="st" data-s="${b}"><i></i>${ago(c.created_at)}</span></div></article>`;
+      <div class="meta"><span>${esc(who)} · ${tc(c.t)}</span><span class="st" data-s="${b}"><i></i>${ago(c.created_at)}</span></div>
+      ${b === "ready" ? `<div class="quick"><button class="btn glass-btn mini" data-q="skipped">Skip</button><button class="btn primary mini" data-q="approved">Post</button></div>`
+        : b === "approved" ? `<div class="quick"><button class="btn glass-btn mini" data-q="ready">Don't post</button></div>`
+        : b === "skipped" ? `<div class="quick"><button class="btn glass-btn mini" data-q="ready">Bring back</button></div>` : ""}</article>`;
   }).join("") || `<div class="empty glass">${F === "ready" ? "No new clips yet. They land here a few minutes after someone you watch goes live." : "Nothing here yet."}</div>`;
   tilt(document.querySelectorAll(".card"));
 }
 function render() {
   document.querySelectorAll("#tabs button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.f === F));
-  renderHero(); renderLive(); renderSlots(); renderConn();
+  renderHero(); renderLive(); renderSlots(); renderConn(); renderChannels();
   if (current && !$("#sheet").hidden) fillSheet(current, false);
 }
 /* clip sheet */
@@ -220,7 +244,7 @@ function fillSheet(id, fresh = true) {
   $("#cNote").textContent = posted ? `Sent to YouTube ${c.posted_at ? ago(c.posted_at) : ""}` : b === "approved" ? "Goes out on the next post." : "Post this sends it to the YouTube queue.";
 }
 function openSheet(id) { current = id; fillSheet(id); $("#scrim").hidden = false; $("#sheet").hidden = false; }
-function closeAll() { $("#scrim").hidden = true; $("#sheet").hidden = true; $("#addSheet").hidden = true; $("#clipVideo").pause(); current = null; }
+function closeAll() { $("#scrim").hidden = true; $("#sheet").hidden = true; $("#addSheet").hidden = true; $("#connSheet").hidden = true; $("#clipVideo").pause(); current = null; }
 async function setStatus(st) {
   const id = current; if (!id) return;
   try { await call("set", { id, status: st }); toast(st === "approved" ? "Queued to post" : st === "skipped" ? "Skipped" : "Moved back to new"); }
@@ -230,25 +254,66 @@ async function setStatus(st) {
 /* creators sheet */
 function renderConn() {
   const live = new Set(D.streams.filter(isLive).map((s) => s.source_id));
-  $("#conn").innerHTML = D.sources.map((s) => `<div><span style="display:flex;align-items:center;gap:8px"><i class="lv ${live.has(s.id) ? "on" : ""}"></i>${esc(s.name)}</span><em class="${live.has(s.id) ? "on" : ""}">${live.has(s.id) ? "live now" : s.platform === "twitch" ? "Twitch" : "YouTube"}</em></div>`).join("") || `<div>Nobody yet</div>`;
+  const on = D.sources.filter((s) => s.enabled !== false);
+  $("#conn").innerHTML = on.map((s) => `<div><span style="display:flex;align-items:center;gap:8px;min-width:0"><i class="lv ${live.has(s.id) ? "on" : ""}"></i>${esc(s.name)}<em class="${live.has(s.id) ? "on" : ""}">${live.has(s.id) ? "live now" : s.platform === "twitch" ? "Twitch" : "YouTube"}</em></span><button class="btn ghost mini" type="button" data-rm="${esc(s.id)}">Remove</button></div>`).join("") || `<div>Nobody yet</div>`;
+  const full = on.length >= 3;
+  $("#addCreator").disabled = full; $("#handle").disabled = full;
+  $("#handle").placeholder = full ? "3 max. Remove one to add another" : "@IShowSpeed or kaicenat";
+  $("#addTitle").textContent = `Creators ${on.length}/3`;
+}
+function renderChannels() {
+  const st = D.settings || {}, ch = st.channels || [];
+  const icon = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", twitter: "X" };
+  $("#chanList").innerHTML = ch.map((c) => `<div><span style="display:flex;align-items:center;gap:10px;min-width:0">${c.avatar ? `<img src="${esc(c.avatar)}" alt="" style="width:30px;height:30px;border-radius:50%">` : ""}<span style="display:grid;gap:2px;min-width:0"><span>${esc(c.name)}</span><em class="on">${icon[c.service] || esc(c.service)} · connected</em></span></span><button class="tog" type="button" data-ch="${esc(c.id)}" aria-pressed="${!!c.autopost}">${c.autopost ? "Auto-post on" : "Auto-post off"}</button></div>`).join("") || `<div>No accounts connected yet</div>`;
+  const aa = st.auto_approve === true;
+  $("#autoApprove").setAttribute("aria-pressed", aa); $("#autoApprove").textContent = aa ? "On" : "Off";
 }
 function openAdd(focus) { $("#scrim").hidden = false; $("#addSheet").hidden = false; $("#addNote").textContent = ""; setTimeout(() => $(focus).focus(), 50); }
 
+$("#pipeline").addEventListener("click", (e) => { const b = e.target.closest("[data-go]"); if (b) { F = b.dataset.go; render(); $("#slots").scrollIntoView({ behavior: "smooth", block: "start" }); } });
 $("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { F = b.dataset.f; render(); } });
-$("#slots").addEventListener("click", (e) => { const c = e.target.closest("[data-id]"); if (c) openSheet(c.dataset.id); });
+$("#slots").addEventListener("click", async (e) => {
+  const q = e.target.closest("[data-q]"), c = e.target.closest("[data-id]");
+  if (q && c) {
+    e.stopPropagation(); q.disabled = true;
+    try { await call("set", { id: c.dataset.id, status: q.dataset.q }); toast({ approved: "Approved, it posts next", skipped: "Skipped", ready: "Back in Needs your OK" }[q.dataset.q]); }
+    catch { toast("Didn't save, try again"); }
+    return load();
+  }
+  if (c) openSheet(c.dataset.id);
+});
 $("#slots").addEventListener("keydown", (e) => { const c = e.target.closest("[data-id]"); if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openSheet(c.dataset.id); } });
-$("#switch").addEventListener("click", (e) => { const b = e.target.closest("[data-w]"); if (b) { watching = b.dataset.w; renderLive(); } });
+$("#multi").addEventListener("click", (e) => { const b = e.target.closest("[data-hide]"); if (b) { hiddenTiles.add(b.dataset.hide); saveHidden(); renderLive(); } });
+$("#liveChips").addEventListener("click", (e) => { if (e.target.closest("#showAll")) { hiddenTiles.clear(); saveHidden(); renderLive(); } });
 $("#cStatus").addEventListener("click", (e) => { const b = e.target.closest("[data-s]"); if (b && b.getAttribute("aria-pressed") !== "true") setStatus(b.dataset.s); });
 $("#cPost").onclick = () => setStatus("approved");
 $("#cSkip").onclick = () => setStatus("skipped");
-$("#closeSheet").onclick = closeAll; $("#closeAdd").onclick = closeAll; $("#scrim").onclick = closeAll;
+$("#closeSheet").onclick = closeAll; $("#closeConn").onclick = closeAll;
+$("#openConn").onclick = () => { $("#scrim").hidden = false; $("#connSheet").hidden = false; $("#connNote").textContent = ""; };
+$("#chanList").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-ch]"); if (!b) return;
+  const on = b.getAttribute("aria-pressed") !== "true";
+  try { await call("settings", { channel: b.dataset.ch, autopost: on }); $("#connNote").textContent = on ? "Auto-post on. Approved clips go out on this account." : "Auto-post off. Nothing posts here."; load(); }
+  catch { $("#connNote").textContent = "Didn't save, try again."; }
+});
+$("#autoApprove").onclick = async () => {
+  const on = $("#autoApprove").getAttribute("aria-pressed") !== "true";
+  try { await call("settings", { auto_approve: on }); $("#connNote").textContent = on ? "Auto-approve on. Strong clips post without review." : "Auto-approve off. You approve every clip."; load(); }
+  catch { $("#connNote").textContent = "Didn't save, try again."; }
+}; $("#closeAdd").onclick = closeAll; $("#scrim").onclick = closeAll;
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAll(); });
 $("#openAdd").onclick = () => openAdd("#handle"); $("#openCreators").onclick = () => openAdd("#handle"); $("#openLink").onclick = () => openAdd("#url");
+$("#conn").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-rm]"); if (!b) return;
+  if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap to confirm"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Remove"; }, 3000); return; }
+  try { await call("remove", { id: b.dataset.rm }); $("#addNote").textContent = "Removed. Their clips stay on the desk."; load(); }
+  catch { $("#addNote").textContent = "Didn't remove, try again."; }
+});
 $("#plat").addEventListener("click", (e) => { const b = e.target.closest("[data-p]"); if (!b) return; plat = b.dataset.p; $("#plat").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b)); });
 $("#addCreator").onclick = async () => {
   const name = $("#handle").value.trim().replace(/^@/, ""); if (!name) return ($("#addNote").textContent = "Type a handle first.");
   try { await call("source", { name, platform: plat, handle: plat === "youtube" ? "@" + name : name.toLowerCase() }); $("#handle").value = ""; $("#addNote").textContent = `Watching ${name}. Clips start when they go live.`; load(); }
-  catch { $("#addNote").textContent = "Didn't save, try again."; }
+  catch (err) { $("#addNote").textContent = err.message === "max 3 creators" ? "You're watching 3 already. Remove one first." : "Didn't save, try again."; }
 };
 $("#addStream").onclick = async () => {
   const u = $("#url").value.trim(); if (!u) return ($("#addNote").textContent = "Paste a link first.");

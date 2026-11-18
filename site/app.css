@@ -265,8 +265,23 @@ button{font:inherit;color:inherit}
 }
 
 /* ---- Clip Desk additions, built from the Studio pieces above ---- */
-.live{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;padding:12px;border-radius:38px;margin-bottom:18px}
-@media (max-width:900px){.live{grid-template-columns:1fr}}
+.live{display:grid;gap:12px;padding:14px;border-radius:38px;margin-bottom:18px}
+.live-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;padding:2px 6px 0}
+.live-head p{margin:0;font-size:12px;color:var(--ink2)}
+.multi{display:grid;gap:12px;grid-template-columns:1fr}
+.multi[data-n="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+.multi[data-n="3"]{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:900px){.multi[data-n="3"]{grid-template-columns:repeat(2,minmax(0,1fr))}.multi[data-n="3"] .tile:first-child{grid-column:1/-1}}
+@media (max-width:620px){.multi[data-n="2"],.multi[data-n="3"]{grid-template-columns:1fr}}
+.multi[data-n="1"] .tile{max-width:980px;width:100%;justify-self:center}
+.tile{display:grid;gap:10px;min-width:0}
+.tile-info{display:grid;gap:8px;padding:0 6px 4px;min-width:0}
+.tile-info .t-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.close-tile{position:absolute;right:10px;top:10px;z-index:3;width:34px;height:34px;padding:0;background:rgba(255,255,255,.75);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:inset 0 1px 0 #fff}
+.close-tile svg{width:16px;height:16px}
+.off-tile .off{position:absolute}
+#conn div{gap:10px}
+#conn em{margin-left:6px}
 .screen{position:relative;aspect-ratio:16/9;border-radius:28px;overflow:hidden;background:#dfe6f7;isolation:isolate;box-shadow:0 12px 26px -12px rgba(11,21,48,.35)}
 .screen::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:2;pointer-events:none;box-shadow:inset 0 2px 10px -2px rgba(255,255,255,.6),inset 0 0 0 1.5px rgba(255,255,255,.25)}
 .screen iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
@@ -292,3 +307,20 @@ button{font:inherit;color:inherit}
 
 /* calmer: no pointer spotlight on glass */
 .glass::after{display:none}
+
+/* Clipora: animated flowing gradient instead of the orbs */
+.orbs{display:none}
+body{background:#EEF3FF}
+.bg{position:fixed;inset:0;z-index:-1;overflow:hidden;background:linear-gradient(160deg,#EAF0FF,#F7F9FF 55%,#E9EFFF)}
+.bg::before,.bg::after{content:"";position:absolute;inset:-40%;filter:blur(70px);will-change:transform}
+.bg::before{background:conic-gradient(from 0deg at 50% 50%,#D6E2FF,#F4F7FF 25%,#BCD0FF 45%,#F2F6FF 65%,#CFDDFF 85%,#D6E2FF);opacity:.9;animation:drift 48s linear infinite}
+.bg::after{background:conic-gradient(from 90deg at 35% 65%,rgba(255,255,255,0),rgba(140,170,255,.45) 20%,rgba(255,255,255,0) 40%,rgba(200,220,255,.6) 70%,rgba(255,255,255,0));opacity:.7;animation:drift 70s linear infinite reverse}
+@keyframes drift{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.bg::before,.bg::after{animation:none}}
+.mark{width:26px;height:26px}
+button.stage{all:unset;box-sizing:border-box;display:grid;gap:8px;min-width:0;cursor:pointer;padding:6px 8px;margin:-6px -8px;border-radius:16px;transition:background .4s var(--ease)}
+button.stage:hover{background:rgba(255,255,255,.55)}
+button.stage:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+button.stage.here em{color:var(--blue);font-weight:700}
+.quick{display:flex;gap:6px;margin:0 2px 2px}
+.quick .btn{flex:1}
