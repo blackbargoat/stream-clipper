@@ -278,6 +278,12 @@ if __name__ == "__main__":
     a = p.parse_args()
     row = stream_row(a.stream)
     meta = ytdlp_json(row["url"]) or {}
+    if not meta and "youtu" in row["url"]:
+        # YouTube refuses data-center servers ("confirm you're not a bot"). We don't try to get around that;
+        # YouTube streams run on the home runner (a normal home connection) instead.
+        msg = "YouTube blocked this server. YouTube streams need the home runner (see README)."
+        log(msg); rest("PATCH", f"clip_streams?id=eq.{row['id']}", {"status": "waiting_home", "error": msg}, prefer="return=minimal")
+        sys.exit(0)
     if meta.get("title") and not row.get("title"):
         rest("PATCH", f"clip_streams?id=eq.{row['id']}", {"title": meta["title"]}, prefer="return=minimal"); row["title"] = meta["title"]
     try:

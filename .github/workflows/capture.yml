@@ -5,10 +5,12 @@ on:
   workflow_dispatch:
     inputs:
       stream: { description: "clip_streams id", required: true }
+      home: { description: "run on the home runner (YouTube)", required: false, default: "false" }
 concurrency: { group: "capture-${{ inputs.stream }}", cancel-in-progress: false }
 jobs:
   capture:
-    runs-on: ubuntu-latest
+    # YouTube refuses data-center IPs, so YouTube streams run on the self-hosted home runner; Twitch runs in the cloud.
+    runs-on: ${{ inputs.home == 'true' && 'self-hosted' || 'ubuntu-latest' }}
     timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4

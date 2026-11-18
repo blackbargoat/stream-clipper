@@ -26,8 +26,15 @@ def live_url(src):
     return None, None
 
 
-def dispatch(stream_id):
-    r = subprocess.run(["gh", "workflow", "run", "capture.yml", "-R", REPO, "-f", f"stream={stream_id}"], capture_output=True, text=True)
+HOME = os.environ.get("HOME_RUNNER") == "1"  # a self-hosted runner on a home connection is set up (repo variable)
+
+
+def dispatch(stream_id, url):
+    yt = "youtu" in url
+    if yt and not HOME:
+        return False  # YouTube blocks cloud servers; wait for the home runner instead of failing over and over
+    r = subprocess.run(["gh", "workflow", "run", "capture.yml", "-R", REPO, "-f", f"stream={stream_id}", "-f", f"home={'true' if yt else 'false'}"],
+                       capture_output=True, text=True)
     log("start capture", stream_id, r.returncode, r.stderr.strip()[:200])
     return r.returncode == 0
 
@@ -43,9 +50,14 @@ def main():
             rest("POST", "clip_streams?on_conflict=url", [{"source_id": src["id"], "url": url, "title": title, "status": "live"}],
                  prefer="resolution=ignore-duplicates,return=minimal")
     stale = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 15 * 60))
-    todo = rest("GET", f"clip_streams?select=id,url,status&or=(status.in.(queued,live),and(status.eq.capturing,runner_seen_at.lt.{stale}))")
+    todo = rest("GET", f"clip_streams?select=id,url,status&or=(status.in.(queued,live,waiting_home),and(status.eq.capturing,runner_seen_at.lt.{stale}))")
     for s in todo:
-        if dispatch(s["id"]):
+        if s["status"] == "waiting_home" and not HOME:
+            continue
+        if not HOME and "youtu" in s["url"]:
+            rest("PATCH", f"clip_streams?id=eq.{s['id']}", {"status": "waiting_home", "error": "YouTube blocks cloud servers. Waiting for the home runner."}, prefer="return=minimal")
+            continue
+        if dispatch(s["id"], s["url"]):
             # mark it taken so the next check doesn't start a second job; the job's heartbeat keeps it fresh
             rest("PATCH", f"clip_streams?id=eq.{s['id']}", {"status": "capturing", "runner_seen_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
                  prefer="return=minimal")

@@ -9,7 +9,8 @@ concurrency: { group: watch, cancel-in-progress: false }
 permissions: { contents: read, actions: write }
 jobs:
   watch:
-    runs-on: ubuntu-latest
+    # YouTube also blocks cloud servers from checking who is live, so the watcher runs at home once that runner exists
+    runs-on: ${{ vars.HOME_RUNNER == '1' && 'self-hosted' || 'ubuntu-latest' }}
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
@@ -17,6 +18,7 @@ jobs:
       - run: pip install -q -U yt-dlp
       - run: python3 clipper/watch.py
         env:
+          HOME_RUNNER: ${{ vars.HOME_RUNNER }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           GH_TOKEN: ${{ github.token }}
       - name: Next check in ~4 min
