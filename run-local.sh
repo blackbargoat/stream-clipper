@@ -4,7 +4,7 @@
 cd "$(dirname "$0")/clipper"
 SID="$1"; export CLIP_WORK="/tmp/clipora/$SID"
 while true; do
-  mkdir -p "$CLIP_WORK"
+  rm -rf "$CLIP_WORK/pieces" "$CLIP_WORK/audio.pcm"; mkdir -p "$CLIP_WORK"  # fresh recording each start
   caffeinate -i python3 live.py --stream "$SID" --max-minutes 330
   ST=$(curl -s "https://etdbjahwegsmuelcawgf.supabase.co/rest/v1/clip_streams?id=eq.$SID&select=status" -H "apikey: $SUPABASE_SERVICE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_KEY")
   echo "$(date +%H:%M) stream status: $ST"

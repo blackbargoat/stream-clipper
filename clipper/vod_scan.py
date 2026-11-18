@@ -7,15 +7,19 @@ moments are usually much stronger than what live scoring catches.
   SUPABASE_SERVICE_KEY=... CLIP_WORKER_KEY=... python3 vod_scan.py [--per-creator 2] [--clips 8] [--max-hours 14]
 Skips VODs already in clip_streams. Needs a normal (home) connection: YouTube blocks data-center servers.
 """
-import argparse, json, os, subprocess, sys
+import argparse, json, os, re, subprocess, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import log, rest  # noqa: E402
 
 
+# Only GTA 6 content for now (the channel's focus while GTA 6 is out). Matches "GTA 6", "GTA6", "GTA VI", "Grand Theft Auto 6/VI".
+TOPIC = re.compile(r"\bgta\s*(6|vi)\b|grand\s+theft\s+auto\s*(6|vi)\b", re.I)
+
+
 def recent_vods(handle, n):
     h = handle if handle.startswith("@") else "@" + handle
-    out = subprocess.run(["yt-dlp", "--no-warnings", "--flat-playlist", "-J", "--playlist-end", str(n * 3), f"https://www.youtube.com/{h}/streams"],
+    out = subprocess.run(["yt-dlp", "--no-warnings", "--flat-playlist", "-J", "--playlist-end", str(max(15, n * 6)), f"https://www.youtube.com/{h}/streams"],
                          capture_output=True, text=True, timeout=180)
     if out.returncode != 0 or not out.stdout.strip():
         log(handle, "couldn't list streams:", out.stderr.strip()[-200:]); return []
@@ -25,6 +29,8 @@ def recent_vods(handle, n):
             continue  # live ones are handled by the live clipper
         if (e.get("duration") or 0) < 20 * 60:
             continue
+        if not TOPIC.search(e.get("title") or ""):
+            continue  # not GTA 6
         vods.append({"url": f"https://www.youtube.com/watch?v={e['id']}", "title": e.get("title"), "duration": e.get("duration")})
         if len(vods) >= n:
             break

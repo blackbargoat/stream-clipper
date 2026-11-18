@@ -238,12 +238,12 @@ def render(src, peak, out, title=None, model="base.en", words=None, audio_shift=
         inputs += ["-loop", "1", "-i", png]; n_in += 1
         vf += f"[base];[base][{n_in - 1}:v]overlay=0:0:format=auto:shortest=1"
     vf += ",format=yuv420p[v]"
-    af = "[acat]"
+    af = "[acat]"  # (no comma after a bare label; the loudnorm filter follows directly)
     if hk and os.path.exists(WHOOSH):
         inputs += ["-i", WHOOSH]; n_in += 1
         at = max(0, (hk[1] - hk[0]) - 0.32)  # whoosh lands on the cut from the hook into the clip
-        af = f"[{n_in - 1}:a]adelay={int(at * 1000)}:all=1,volume=0.9[wh];[acat][wh]amix=inputs=2:duration=first:normalize=0"
-    graph = pre + vf + ";" + af + ",loudnorm=I=-14:TP=-1.5:LRA=11[aout]"
+        af = f"[{n_in - 1}:a]adelay={int(at * 1000)}:all=1,volume=0.9[wh];[acat][wh]amix=inputs=2:duration=first:normalize=0,"
+    graph = pre + vf + ";" + af + "loudnorm=I=-14:TP=-1.5:LRA=11[aout]"
     sh(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", graph, "-map", "[v]", "-map", "[aout]",
         "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-maxrate", "6.4M", "-bufsize", "12M", "-c:a", "aac", "-b:a", "192k",
         "-ar", "48000", "-movflags", "+faststart", out])
