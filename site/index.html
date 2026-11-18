@@ -8,7 +8,7 @@
 <link rel="icon" href="refs/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="app.css?v=5">
+<link rel="stylesheet" href="app.css?v=6">
 </head>
 <body>
 <div class="bg" aria-hidden="true"></div>
@@ -162,12 +162,20 @@ function renderHero() {
   $("#bigCount").textContent = n;
   $("#bigUnit").textContent = { ready: "need your OK", approved: "approved", posted: "posted", skipped: "skipped" }[F];
   $("#bigSub").textContent = live.length ? `clipping ${live.map((s) => srcOf(s)?.name || "a stream").join(", ")} live` : "nobody live right now";
-  const today = D.clips.filter((c) => Date.now() - Date.parse(c.created_at) < 864e5).length;
+  const today = D.clips.filter((c) => Date.now() - Date.parse(c.created_at) < 864e5);
   const cnt = (k) => D.clips.filter((c) => bucket(c) === k).length;
-  const rows = [["Clipped today", today, null], ["Needs your OK", cnt("ready"), "ready"], ["Approved, posting next", cnt("approved"), "approved"], ["Posted", cnt("posted"), "posted"]];
-  const max = Math.max(1, ...rows.map((r) => r[1]));
-  $("#pipeline").innerHTML = rows.map(([k, v, go]) => `<${go ? `button type="button" data-go="${go}"` : "div"} class="stage ${go === F ? "here" : ""}"><span><em>${k}</em><b>${v}</b></span><div class="bar"><i style="width:${(100 * v / max).toFixed(0)}%"></i></div></${go ? "button" : "div"}>`).join("");
+  const reviewed = today.filter((c) => c.review_score != null), kept = reviewed.filter((c) => c.review?.keep && c.review_score >= 5).length;
+  const rows = [
+    ["Clipped", "today", today.length, null],
+    ["AI review", `${kept} kept, ${reviewed.length - kept} cut`, reviewed.length, null],
+    ["Needs your OK", "tap to review", cnt("ready"), "ready"],
+    ["Approved", "posts next", cnt("approved"), "approved"],
+    ["Posted", "on your accounts", cnt("posted"), "posted"]];
+  const max = Math.max(1, ...rows.map((r) => r[2]));
+  $("#pipeline").innerHTML = rows.map(([k, sub, v, go]) => `<${go ? `button type="button" data-go="${go}"` : "div"} class="stage ${go && go === F ? "here" : ""}"><span><em>${k}<small>${sub}</small></em><b>${v}</b></span><div class="bar"><i style="width:${(100 * v / max).toFixed(0)}%"></i></div></${go ? "button" : "div"}>`).join("");
 }
+let hiddenTiles = new Set((() => { try { return JSON.parse(localStorage.getItem("clipdesk-hidden") || "[]"); } catch { return []; } })());
+const saveHidden = () => { try { localStorage.setItem("clipdesk-hidden", JSON.stringify([...hiddenTiles])); } catch {} };
 function renderLive() {
   const live = D.streams.filter(isLive).slice(0, 3);
   const shown = live.filter((s) => !hiddenTiles.has(s.id)), hid = live.length - shown.length;
@@ -214,7 +222,7 @@ function renderSlots() {
     const b = bucket(c), who = srcOf(streamOf(c))?.name || "";
     return `<article class="card glass" data-id="${esc(c.id)}" tabindex="0">
       <div class="thumb"><img src="${esc(c.thumb_url)}?v=${Date.parse(c.created_at) || 0}" alt="" loading="lazy">
-        <div class="badge"><span class="pill ${b === "approved" ? "blue" : ""}">${LABEL[b]}</span></div><span class="pill time mono">${Number(c.duration || 0).toFixed(0)}s</span></div>
+        <div class="badge"><span class="pill ${b === "approved" ? "blue" : ""}">${LABEL[b]}</span></div><span class="pill time mono">${Number(c.duration || 0).toFixed(0)}s</span>${c.review_score != null ? `<span class="ai ${c.review_score >= 7 ? "hi" : c.review_score < 6 ? "lo" : ""}">AI ${Number(c.review_score).toFixed(1)}</span>` : ""}</div>
       <h3>${esc(c.title)}</h3>
       <div class="meta"><span>${esc(who)} · ${tc(c.t)}</span><span class="st" data-s="${b}"><i></i>${ago(c.created_at)}</span></div>
       ${b === "ready" ? `<div class="quick"><button class="btn glass-btn mini" data-q="skipped">Skip</button><button class="btn primary mini" data-q="approved">Post</button></div>`
@@ -236,7 +244,12 @@ function fillSheet(id, fresh = true) {
   $("#clipLen").textContent = Number(c.duration || 0).toFixed(1) + "s"; $("#clipOpen").href = c.video_url;
   $("#cCreator").textContent = srcOf(s)?.name || "Clip"; $("#cAt").textContent = tc(c.t) + " in"; $("#cScore").textContent = "score " + Number(c.score || 0).toFixed(1);
   $("#sheetTitle").textContent = c.title;
-  $("#cFacts").innerHTML = [["Stream", esc(s?.title || s?.url || "")], ["Why", "loud moment" + ((c.why || []).includes("chat") ? " + chat spike" : "")], ["Length", Number(c.duration || 0).toFixed(1) + " seconds"]]
+  const rv = c.review || {}, sy = c.sync || {};
+  $("#cFacts").innerHTML = [
+    ["AI review", c.review_score != null ? `${Number(c.review_score).toFixed(1)}/10 · ${esc(rv.why || "")}` : "not reviewed yet"],
+    ["Moment", "loud moment" + ((c.why || []).includes("chat") ? " + chat spike" : "") + ` · ${tc(c.t)} in`],
+    ["Lip sync", sy.status ? `${esc(sy.status)}${sy.after != null ? ` · ${Math.round(Math.abs(sy.after) * 1000)} ms off YouTube's copy` : ""}` : "not checked"],
+    ["Stream", esc(s?.title || s?.url || "")]]
     .map(([k, v]) => `<li><b>${k}</b><span>${v}</span></li>`).join("");
   const posted = b === "posted";
   $("#cStatus").innerHTML = (posted ? ["posted"] : ["ready", "approved", "skipped"]).map((k) => `<button type="button" data-s="${k}" aria-pressed="${k === b}" ${posted ? "disabled" : ""}>${LABEL[k]}</button>`).join("");

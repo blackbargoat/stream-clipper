@@ -17,7 +17,7 @@ import argparse, glob, json, os, re, shutil, socket, subprocess, sys, threading,
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import log, rest, upload, title_for, ytdlp_json  # noqa: E402
+from common import log, rest, upload, title_for, review_for, ytdlp_json  # noqa: E402
 import find_moments as fm  # noqa: E402
 import render as rd  # noqa: E402
 import sync_audit  # noqa: E402
@@ -25,6 +25,8 @@ import sync_audit  # noqa: E402
 WORK = os.environ.get("CLIP_WORK", "/tmp/clipwork")
 SEG = 60
 MIN_SCORE = float(os.environ.get("CLIP_MIN_SCORE", "3.2"))   # combined z-score a moment needs
+KEEP_SCORE = float(os.environ.get("CLIP_KEEP_SCORE", 6))
+AUTO_APPROVE_SCORE = 8.0
 MAX_PER_HOUR = int(os.environ.get("CLIP_MAX_PER_HOUR", "6"))
 
 
@@ -133,6 +135,13 @@ def make_clip(row, src, peak_in_src, t_abs, sc, why, capture_start=None):
     if len(text.split()) < 6:
         log(f"  skip {t_abs}s: almost no talking"); return None
     title = title_for(text, who, row.get("title"))
+    # Review: is it worth keeping? Clips under KEEP_SCORE go to Skipped (you can bring them back on the site).
+    rv = review_for(text, title, who, row.get("title"), sc)
+    if rv and rv.get("better_title"):
+        title = rv["better_title"]
+    settings = {r["key"]: r["value"] for r in (rest("GET", "clip_settings?select=key,value") or [])}
+    keep = (rv is None) or (rv.get("keep") and float(rv.get("score", 0)) >= KEEP_SCORE)
+    status = "skipped" if not keep else ("approved" if settings.get("auto_approve") is True and float(rv.get("score", 0)) >= AUTO_APPROVE_SCORE else "ready")
     out = os.path.join(WORK, f"clip_{t_abs}.mp4")
     info = rd.render(src, peak_in_src, out, title, words=words)
     thumb = out.replace(".mp4", ".jpg")
@@ -140,9 +149,10 @@ def make_clip(row, src, peak_in_src, t_abs, sc, why, capture_start=None):
     key = f"{sid[:8]}/{t_abs}"
     v = upload(out, key + ".mp4", "video/mp4"); th = upload(thumb, key + ".jpg", "image/jpeg")
     rest("POST", "clip_clips?on_conflict=stream_id,t", [{"stream_id": sid, "t": t_abs, "score": round(sc, 2), "why": why, "title": title,
-        "transcript": info["transcript"][:4000], "duration": info["duration"], "layout": info["layout"], "video_url": v, "thumb_url": th, "sync": sync}],
+        "transcript": info["transcript"][:4000], "duration": info["duration"], "layout": info["layout"], "video_url": v, "thumb_url": th, "sync": sync,
+        "review_score": rv.get("score") if rv else None, "review": rv, "status": status, "stage": "edited"}],
         prefer="resolution=merge-duplicates,return=minimal")
-    log(f"  clip {t_abs}s → {title} ({info['duration']}s, {info['layout']})")
+    log(f"  clip {t_abs}s → {title} ({info['duration']}s, {info['layout']}) review {rv.get('score') if rv else '-'} → {status}")
     return v
 
 

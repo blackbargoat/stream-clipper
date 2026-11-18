@@ -47,3 +47,14 @@ def title_for(transcript, creator, stream_title):
 def ytdlp_json(url):
     out = subprocess.run(["yt-dlp", "--no-warnings", "-J", url], capture_output=True, text=True, timeout=120)
     return json.loads(out.stdout) if out.returncode == 0 and out.stdout.strip() else None
+
+
+def review_for(transcript, title, creator, stream_title, moment):
+    """AI review: {score 0-10, keep, why, better_title}. None if the reviewer is unavailable."""
+    try:
+        r = req("POST", f"{SB}/functions/v1/clips/review", {"transcript": transcript[:3000], "title": title, "creator": creator,
+                "stream": stream_title or "", "moment": float(moment)}, headers={"x-worker-key": os.environ.get("CLIP_WORKER_KEY", "")}, timeout=45)
+        return r if isinstance(r, dict) and "score" in r else None
+    except Exception as e:  # noqa: BLE001
+        log("review unavailable:", e)
+        return None
