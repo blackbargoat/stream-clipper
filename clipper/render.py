@@ -90,7 +90,7 @@ def find_cam(src, sw, sh_, dur):
     cx, cy, fw = best
     if fw > sh_ * 0.22:  # a big face = the camera is the whole frame (IRL)
         return ("face", cx)
-    bw = min(fw * 4.6, sw * 0.5); bh = bw / (W / (H * 0.38))  # match the top area's shape so nothing squashes
+    bw = min(fw * 3.4, sw * 0.5); bh = bw / (W / (H * 0.38))  # match the top area's shape so nothing squashes
     x = int(min(max(cx - bw / 2, 0), sw - bw)); y = int(min(max(cy - bh * 0.42, 0), sh_ - bh))
     return (x, y, int(bw), int(bh))
 
@@ -170,12 +170,16 @@ def render(src, peak, out, title=None, model="base.en", words=None):
         # white title box (Joe Bart style), drawn as a transparent PNG so emoji render; sits on the seam or near the top
         png = os.path.join(tmp, "title.png")
         seam = int(H * split) if layout == "cam+game" else 260
-        sh([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "make_title.py"), title, png, str(seam)])
+        t = title
+        if len(t) > 26 and "|" not in t:  # two balanced lines instead of one that runs off the box
+            ws = t.split(); cut = min(range(1, len(ws)), key=lambda i: abs(len(" ".join(ws[:i])) - len(" ".join(ws[i:]))))
+            t = " ".join(ws[:cut]) + "|" + " ".join(ws[cut:])
+        sh([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "make_title.py"), t, png, str(seam)])
         inputs += ["-i", png]
         vf += "[base];[base][2:v]overlay=0:0:format=auto"
     vf += ",format=yuv420p[v]"
     sh(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", vf, "-map", "[v]", "-map", "0:a",
-        "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-c:a", "aac", "-b:a", "192k",
+        "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-maxrate", "6M", "-bufsize", "12M", "-c:a", "aac", "-b:a", "192k",
         "-ar", "48000", "-movflags", "+faststart", out])
     text = " ".join(w["text"] for w in words if start <= w["start"] <= end)
     return {"start": start, "end": end, "duration": round(end - start, 1), "layout": layout, "cam": cam if cam and cam[0] != "face" else None, "transcript": text}

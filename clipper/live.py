@@ -146,7 +146,8 @@ def run_live(row, max_minutes):
         raise RuntimeError("no live feed (stream may have ended)")
     t0 = time.time()
     pcm = os.path.join(WORK, "audio.pcm")  # continuous 16 kHz mono audio: the timeline every moment is measured on
-    ins = ["-i", feed[0]] + (["-i", feed[1]] if len(feed) > 1 else [])
+    rc = ["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_on_network_error", "1", "-reconnect_delay_max", "10"]
+    ins = [*rc, "-i", feed[0]] + ([*rc, "-i", feed[1]] if len(feed) > 1 else [])
     a_in = "1:a:0" if len(feed) > 1 else "0:a:0"
     rec = subprocess.Popen(["ffmpeg", "-v", "error", "-y", *ins,
                             "-map", "0:v:0", "-map", a_in, "-c", "copy", "-f", "segment", "-segment_time", str(SEG),
