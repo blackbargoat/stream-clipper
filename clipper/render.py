@@ -63,13 +63,14 @@ def find_cam(src, sw, sh_, dur):
     dets = [cv2.CascadeClassifier(cv2.data.haarcascades + f) for f in
             ("haarcascade_frontalface_default.xml", "haarcascade_frontalface_alt2.xml")]
     cap = cv2.VideoCapture(src)
-    frames = []
+    frames, grays = [], []
     for k in range(16):
         cap.set(cv2.CAP_PROP_POS_MSEC, 1000 * dur * (k + 0.5) / 16)
         ok, f = cap.read()
         if not ok:
             continue
         g = cv2.equalizeHist(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY))
+        grays.append(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY))
         hits = []
         for det in dets:
             hits += [tuple(map(int, h)) for h in det.detectMultiScale(g, 1.05, 5, minSize=(int(sh_ * 0.025),) * 2)]
@@ -90,9 +91,24 @@ def find_cam(src, sw, sh_, dur):
     cx, cy, fw = best
     if fw > sh_ * 0.22:  # a big face = the camera is the whole frame (IRL)
         return ("face", cx)
-    bw = min(fw * 3.4, sw * 0.5); bh = bw / (W / (H * 0.38))  # match the top area's shape so nothing squashes
-    x = int(min(max(cx - bw / 2, 0), sw - bw)); y = int(min(max(cy - bh * 0.42, 0), sh_ - bh))
-    return (x, y, int(bw), int(bh))
+    aspect = W / (H * 0.38)  # the top area's shape, so nothing squashes
+    bw = min(fw * 3.7, sw * 0.5); bh = bw / aspect  # the whole cam box: less zoom = less blur
+    # Snap to the cam overlay's real top/bottom border: the strongest horizontal edge that stays put in every
+    # frame (a median over frames wipes out the moving game). Keeps counters and alerts next to the cam out.
+    import numpy as np
+    med = np.median(np.stack(grays), axis=0).astype(np.float32)
+    x0, x1 = int(max(cx - fw * 1.2, 0)), int(min(cx + fw * 1.2, sw))
+    edge = np.abs(np.diff(med[:, x0:x1], axis=0)).mean(axis=1)
+    def strongest(a, b):
+        a, b = int(max(a, 1)), int(min(b, sh_ - 2))
+        return (a + int(np.argmax(edge[a:b]))) if b > a else None
+    top = strongest(cy - fw * 2.2, cy - fw * 0.7)
+    bot = strongest(cy + fw * 0.7, cy + fw * 2.6)
+    y = cy - bh * 0.42
+    if top is not None and bot is not None and edge[top] > 6 and edge[bot] > 6 and fw * 1.6 < bot - top < fw * 4.5:
+        y = top + 3; bh = (bot - 2) - y; bw = min(bh * aspect, sw * 0.5); bh = bw / aspect
+    x = int(min(max(cx - bw / 2, 0), sw - bw)); y = int(min(max(y, 0), sh_ - bh))
+    return (x, y, int(bw) // 2 * 2, int(bh) // 2 * 2)
 
 
 def caption_track(words, start, end, y, tmp):
@@ -146,40 +162,35 @@ def render(src, peak, out, title=None, model="base.en", words=None):
     split = 0.38
     if cam and cam[0] != "face":
         x, y, bw, bh = cam
-        ch = int(H * split)
+        ch = int(H * split) // 2 * 2  # even, or the encoder refuses the frame
         # gameplay: crop the frame to the bottom area's aspect, centred, avoiding the cam box where possible
         gh = H - ch
         gw_src = int(sh_ * W / gh)
         gx = int(min(max((sw - gw_src) / 2, 0), sw - gw_src))
-        vf = (f"[0:v]split[c][g];[c]crop={bw}:{bh}:{x}:{y},scale={W}:{ch}:force_original_aspect_ratio=increase,crop={W}:{ch}[cam];"
-              f"[g]crop={gw_src}:{sh_}:{gx}:0,scale={W}:{gh}[game];[cam][game]vstack")
+        vf = (f"[0:v]split[c][g];[c]crop={bw}:{bh}:{x}:{y},hqdn3d=2:1.5:3:3,scale={W}:{ch}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{ch},unsharp=5:5:0.8:3:3:0.3[cam];"
+              f"[g]crop={gw_src}:{sh_}:{gx}:0,scale={W}:{gh}:flags=lanczos[game];[cam][game]vstack")
         cap_y = ch + 230
         layout = "cam+game"
     else:
         cw = int(sh_ * W / H)
         cx = cam[1] if cam else sw / 2
         x = int(min(max(cx - cw / 2, 0), sw - cw))
-        vf = f"[0:v]crop={cw}:{sh_}:{x}:0,scale={W}:{H}"
+        vf = f"[0:v]crop={cw}:{sh_}:{x}:0,scale={W}:{H}:flags=lanczos"
         cap_y = int(H * 0.68)
         layout = "vertical"
     tmp = tempfile.mkdtemp()
-    lst = caption_track(words, start, end, cap_y, tmp)
-    inputs = ["-ss", str(start), "-to", str(end), "-i", src, "-f", "concat", "-safe", "0", "-i", lst]
-    vf += f",fps=30[base0];[base0][1:v]overlay=0:{cap_y - 130}:format=auto:eof_action=pass"
+    inputs = ["-ss", str(start), "-to", str(end), "-i", src]
+    vf += ",fps=30"
     if title:
         # white title box (Joe Bart style), drawn as a transparent PNG so emoji render; sits on the seam or near the top
         png = os.path.join(tmp, "title.png")
-        seam = int(H * split) if layout == "cam+game" else 260
-        t = title
-        if len(t) > 26 and "|" not in t:  # two balanced lines instead of one that runs off the box
-            ws = t.split(); cut = min(range(1, len(ws)), key=lambda i: abs(len(" ".join(ws[:i])) - len(" ".join(ws[i:]))))
-            t = " ".join(ws[:cut]) + "|" + " ".join(ws[cut:])
-        sh([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "make_title.py"), t, png, str(seam)])
+        seam = int(H * split) // 2 * 2 if layout == "cam+game" else 260
+        sh([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "make_title.py"), title, png, str(seam)])
         inputs += ["-i", png]
-        vf += "[base];[base][2:v]overlay=0:0:format=auto"
+        vf += "[base];[base][1:v]overlay=0:0:format=auto"
     vf += ",format=yuv420p[v]"
     sh(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", vf, "-map", "[v]", "-map", "0:a",
-        "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-maxrate", "6M", "-bufsize", "12M", "-c:a", "aac", "-b:a", "192k",
+        "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-maxrate", "6.4M", "-bufsize", "12M", "-c:a", "aac", "-b:a", "192k",
         "-ar", "48000", "-movflags", "+faststart", out])
     text = " ".join(w["text"] for w in words if start <= w["start"] <= end)
     return {"start": start, "end": end, "duration": round(end - start, 1), "layout": layout, "cam": cam if cam and cam[0] != "face" else None, "transcript": text}

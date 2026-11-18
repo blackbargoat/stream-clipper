@@ -5,221 +5,261 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Clip Desk</title>
 <meta name="robots" content="noindex">
+<link rel="icon" href="refs/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<style>
-/* Broadcast control desk: dark ink, one warm tally-orange accent, monospace timecodes. */
-:root{
-  --ink:#0d0e10; --panel:#16171a; --raise:#1f2024; --line:#2a2b30;
-  --fg:#f4f3ef; --dim:#a9a7a0; --tally:#ff8a1f; --ok:#4cc38a; --idle:#4a4b52;
-  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
-  --body:"Inter",ui-sans-serif,system-ui,sans-serif;
-  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
-  color-scheme:dark;
-}
-*{box-sizing:border-box}
-[hidden]{display:none!important}
-html,body{margin:0;background:var(--ink);color:var(--fg);font:15px/1.5 var(--body)}
-button,input,select{font:inherit;color:inherit}
-button{cursor:pointer;border:0;background:none}
-:focus-visible{outline:2px solid var(--tally);outline-offset:2px}
-.wrap{max-width:1180px;margin:0 auto;padding-block:20px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:18px;border-bottom:1px solid var(--line)}
-.brand{font:800 26px/1 var(--display);letter-spacing:-.5px;display:flex;align-items:center;gap:10px}
-.rec{width:12px;height:12px;border-radius:50%;background:var(--idle)}
-.rec.on{background:var(--tally);animation:blink 1.4s steps(2) infinite}
-@keyframes blink{50%{opacity:.35}}
-@media (prefers-reduced-motion:reduce){.rec.on{animation:none}}
-.status{font:500 13px var(--mono);color:var(--dim)}
-.cols{display:grid;grid-template-columns:320px 1fr;gap:24px;margin-top:24px;align-items:start}
-@media (max-width:880px){.cols{grid-template-columns:1fr}}
-.side{display:grid;gap:16px;min-width:0}
-.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
-.lbl{font:700 11px var(--mono);letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);margin:0 0 12px}
-.creators{display:grid;gap:6px}
-.cr{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;background:var(--raise);font-weight:600}
-.cr .rec{width:9px;height:9px}
-.cr small{margin-left:auto;font:500 12px var(--mono);color:var(--dim)}
-form.row{display:flex;gap:8px;margin-top:10px}
-form.row input,form.row select{min-width:0;flex:1;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--ink);padding:0 12px}
-form.row select{flex:0 0 96px}
-.btn{height:42px;padding:0 16px;border-radius:10px;background:var(--fg);color:var(--ink);font-weight:700;white-space:nowrap}
-.btn.tally{background:var(--tally);color:#1a0d00}
-.btn.ghost{background:var(--raise);color:var(--fg)}
-.streams{display:grid;gap:8px;margin-top:12px}
-.st{padding:10px 12px;border-radius:10px;background:var(--raise);font-size:13px;min-width:0}
-.st b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.st span{font:500 12px var(--mono);color:var(--dim)}
-.st .live{color:var(--tally)}
-.main h1{font:800 clamp(28px,4vw,40px)/1.05 var(--display);letter-spacing:-1px;margin:0;text-wrap:balance}
-.bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
-.tabs{display:flex;gap:4px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;flex-wrap:wrap}
-.tabs button{height:34px;padding:0 12px;border-radius:8px;font-weight:600;font-size:13px;color:var(--dim)}
-.tabs button[aria-pressed=true]{background:var(--raise);color:var(--fg)}
-.tabs i{font-style:normal;font:500 11px var(--mono);margin-left:6px;color:var(--dim)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
-.card{display:grid;gap:8px;text-align:left;min-width:0}
-.thumb{position:relative;aspect-ratio:9/16;max-width:100%;border-radius:12px;overflow:hidden;background:var(--raise);border:1px solid var(--line)}
-.thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.chip{position:absolute;top:8px;left:8px;font:700 10px var(--mono);letter-spacing:.8px;text-transform:uppercase;padding:4px 7px;border-radius:6px;background:var(--fg);color:var(--ink)}
-.chip.approved{background:var(--tally);color:#1a0d00}.chip.posted,.chip.scheduled{background:var(--ok);color:#06180f}.chip.skipped{background:var(--idle);color:var(--fg)}
-.tc{position:absolute;bottom:8px;right:8px;font:700 11px var(--mono);padding:3px 6px;border-radius:6px;background:rgba(13,14,16,.85)}
-.card b{font-weight:600;font-size:14px;line-height:1.3}
-.card span{font:500 12px var(--mono);color:var(--dim)}
-.empty{grid-column:1/-1;padding:40px 16px;text-align:center;color:var(--dim);border:1px dashed var(--line);border-radius:14px}
-dialog{border:0;padding:0;background:transparent;color:var(--fg);max-width:min(980px,calc(100vw - 24px));width:100%}
-dialog::backdrop{background:rgba(5,5,6,.82)}
-.player{display:grid;grid-template-columns:minmax(0,380px) 1fr;gap:20px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
-@media (max-width:720px){.player{grid-template-columns:1fr}}
-.player video{width:100%;max-height:78vh;aspect-ratio:9/16;border-radius:12px;background:#000;display:block}
-.player h2{font:800 24px/1.15 var(--display);margin:0 0 10px;text-wrap:balance}
-.meta{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;margin:0 0 18px}
-.meta dt{font:500 12px var(--mono);color:var(--dim)}.meta dd{margin:0;min-width:0;overflow-wrap:anywhere}
-.acts{display:flex;flex-wrap:wrap;gap:8px}
-.x{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;background:var(--raise);font-size:18px}
-.gate{min-height:100vh;display:grid;place-items:center;padding:16px}
-.gate form{width:min(360px,100%);display:grid;gap:12px}
-.gate h1{font:800 34px/1 var(--display);margin:0 0 6px;display:flex;gap:10px;align-items:center}
-.gate p{color:var(--dim);margin:0 0 6px}
-.gate input{height:48px;border-radius:12px;border:1px solid var(--line);background:var(--panel);padding:0 14px}
-.err{color:var(--tally);font-size:13px;min-height:18px}
-.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--ink);font-weight:700;padding:10px 16px;border-radius:10px;opacity:0;transition:opacity .2s;pointer-events:none}
-.toast.on{opacity:1}
-</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="app.css?v=2">
 </head>
 <body>
-<div id="gate" class="gate"><form id="login">
-  <h1><i class="rec on"></i>Clip Desk</h1>
-  <p>Stream clips waiting for review.</p>
-  <label for="pw" class="lbl" style="margin:0">Password</label>
-  <input id="pw" type="password" autocomplete="current-password" required>
-  <button class="btn tally" type="submit">Open</button>
-  <div class="err" id="err"></div>
-</form></div>
+<div class="orbs" aria-hidden="true"><i class="o1"></i><i class="o2"></i><i class="o3"></i></div>
 
-<div id="app" class="wrap" hidden>
-  <header>
-    <div class="brand"><i class="rec" id="liveDot"></i>Clip Desk</div>
-    <div class="status" id="status">loading</div>
-  </header>
-  <div class="cols">
-    <aside class="side">
-      <section class="box">
-        <h2 class="lbl">Watching</h2>
-        <div class="creators" id="creators"></div>
-        <form class="row" id="addCreator">
-          <select id="plat" aria-label="Platform"><option value="youtube">YouTube</option><option value="twitch">Twitch</option></select>
-          <input id="handle" placeholder="@handle" aria-label="Creator handle" required>
-          <button class="btn" type="submit">Add</button>
-        </form>
-      </section>
-      <section class="box">
-        <h2 class="lbl">Clip a stream</h2>
-        <form class="row" id="addStream">
-          <input id="url" placeholder="YouTube or Twitch link" aria-label="Stream link" required>
-          <button class="btn" type="submit">Clip</button>
-        </form>
-        <div class="streams" id="streams"></div>
-      </section>
-    </aside>
-    <main class="main">
-      <div class="bar">
-        <h1 id="headline">Clips</h1>
-        <div class="tabs" id="tabs">
-          <button data-f="ready" aria-pressed="true">New<i id="n-ready"></i></button>
-          <button data-f="approved" aria-pressed="false">To post<i id="n-approved"></i></button>
-          <button data-f="posted" aria-pressed="false">Posted<i id="n-posted"></i></button>
-          <button data-f="skipped" aria-pressed="false">Skipped<i id="n-skipped"></i></button>
-        </div>
-      </div>
-      <div class="grid" id="grid"></div>
-    </main>
+<header class="top glass">
+  <div class="brand"><img class="mark" src="refs/mark.png" alt=""><b>Clip Desk</b></div>
+  <div class="viewtog" id="tabs" role="tablist">
+    <button type="button" data-f="ready" aria-pressed="true">New</button>
+    <button type="button" data-f="approved" aria-pressed="false">To post</button>
+    <button type="button" data-f="posted" aria-pressed="false">Posted</button>
+    <button type="button" data-f="skipped" aria-pressed="false">Skipped</button>
   </div>
-</div>
+  <div style="flex:1"></div>
+  <div class="top-actions">
+    <button class="btn ghost icon" id="openAdd" aria-label="Creators and links"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  </div>
+</header>
 
-<dialog id="dlg"><div style="position:relative"><button class="x" id="close" aria-label="Close">×</button><div id="dlgBody"></div></div></dialog>
-<div class="toast" id="toast"></div>
+<main class="wrap">
+  <section class="hero">
+    <div class="count glass">
+      <span class="big" id="bigCount">0</span>
+      <span class="unit" id="bigUnit">new clips</span>
+      <span class="date" id="bigSub">waiting for a stream</span>
+    </div>
+    <div class="pipeline glass" id="pipeline"></div>
+    <div class="hero-actions">
+      <button class="btn glass-btn" id="openLink"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span>Clip a link</span></button>
+      <button class="btn primary" id="openCreators"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Add creator</span></button>
+    </div>
+  </section>
+
+  <section class="live glass" aria-label="Live stream">
+    <div class="screen" id="screen">
+      <div class="off" id="off"><b>Nobody you watch is live</b><span>When someone goes live, the stream plays here while it gets clipped.</span></div>
+    </div>
+    <div class="live-side">
+      <div class="chips" style="padding-right:0" id="liveChips"><span class="chip">Watching</span></div>
+      <h2 id="streamTitle">Waiting for a live stream</h2>
+      <div class="creators" id="switch"></div>
+      <div class="stage"><span><em>Next scan</em><b class="mono" id="sNext">-</b></span><div class="bar"><i id="scanBar" style="width:0"></i></div></div>
+      <p>Every 4 minutes the clipper scores the newest stretch of the stream for loud reactions and chat spikes, then cuts the best moments into Shorts.</p>
+    </div>
+  </section>
+
+  <section class="slots" id="slots" aria-live="polite"></section>
+</main>
+
+<!-- clip sheet -->
+<div class="scrim" id="scrim" hidden></div>
+<section class="sheet glass" id="sheet" hidden aria-modal="true" role="dialog" aria-labelledby="sheetTitle">
+  <button class="btn ghost icon close" id="closeSheet" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  <div class="sheet-media">
+    <figure class="phone">
+      <video id="clipVideo" controls playsinline></video>
+      <figcaption><span class="tag blue">Short</span><span class="mono" id="clipLen"></span><a class="views" id="clipOpen" target="_blank" rel="noopener">Open</a></figcaption>
+    </figure>
+  </div>
+  <div class="sheet-body">
+    <div class="chips"><span class="chip" id="cCreator"></span><span class="chip mono" id="cAt"></span><span class="chip trial" id="cScore"></span></div>
+    <h2 id="sheetTitle"></h2>
+    <ol class="beats" id="cFacts"></ol>
+    <div class="field"><span>Status</span><div class="seg" id="cStatus"></div></div>
+    <div class="sheet-actions">
+      <button class="btn glass-btn" id="cSkip"><span>Skip</span></button>
+      <button class="btn primary" id="cPost"><span>Post this</span></button>
+    </div>
+    <p class="note" id="cNote"></p>
+  </div>
+</section>
+
+<!-- creators + links -->
+<section class="sheet glass small" id="addSheet" hidden role="dialog" aria-modal="true" aria-labelledby="addTitle">
+  <button class="btn ghost icon close" id="closeAdd" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  <div class="sheet-body">
+    <h2 id="addTitle">Creators</h2>
+    <div class="conn" id="conn"></div>
+    <div class="field"><span>Platform</span><div class="seg" id="plat"><button type="button" data-p="youtube" aria-pressed="true">YouTube</button><button type="button" data-p="twitch" aria-pressed="false">Twitch</button></div></div>
+    <label class="field"><span>Handle</span><input id="handle" placeholder="@IShowSpeed or kaicenat" autocomplete="off"></label>
+    <div class="sheet-actions"><button class="btn primary" id="addCreator"><span>Watch them</span></button></div>
+    <label class="field" style="margin-top:8px"><span>Or clip one stream or VOD</span><input id="url" placeholder="Paste a YouTube or Twitch link" autocomplete="off"></label>
+    <div class="sheet-actions"><button class="btn glass-btn" id="addStream"><span>Clip it</span></button></div>
+    <p class="note" id="addNote"></p>
+  </div>
+</section>
+
+<div class="toast glass" id="toast" hidden></div>
 
 <script>
 const FN = "https://etdbjahwegsmuelcawgf.supabase.co/functions/v1/clips/";
+const SCAN_EVERY = 240;
 const $ = (s) => document.querySelector(s);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-let KEY = "", D = { sources: [], streams: [], clips: [] }, F = "ready";
-const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }, del: (k) => { try { localStorage.removeItem(k); } catch {} } };
+let D = { sources: [], streams: [], clips: [] }, F = "ready", watching = null, embedded = null, current = null, plat = "youtube";
 async function call(route, body = {}) {
-  const r = await fetch(FN + route, { method: "POST", headers: { "content-type": "application/json", "x-site-key": KEY }, body: JSON.stringify(body) });
+  const r = await fetch(FN + route, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(j.error || "HTTP " + r.status); e.status = r.status; throw e; }
+  if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
   return j;
 }
-function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 2200); }
+function toast(t) { const el = $("#toast"); el.textContent = t; el.hidden = false; el.style.animation = "none"; void el.offsetWidth; el.style.animation = ""; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2400); }
 const tc = (s) => { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ":" : "") + String(m).padStart(2, "0") + ":" + String(x).padStart(2, "0"); };
-const ago = (iso) => { const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)); return m < 60 ? m + "m ago" : m < 1440 ? Math.round(m / 60) + "h ago" : Math.round(m / 1440) + "d ago"; };
+const ago = (iso) => { const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)); return m < 1 ? "just now" : m < 60 ? m + "m ago" : m < 1440 ? Math.round(m / 60) + "h ago" : Math.round(m / 1440) + "d ago"; };
 const bucket = (c) => c.status === "scheduled" ? "posted" : c.status;
+const isLive = (s) => ["live", "capturing"].includes(s.status);
+const srcOf = (s) => (s && D.sources.find((x) => x.id === s.source_id)) || null;
+const streamOf = (c) => D.streams.find((s) => s.id === c.stream_id);
+const LABEL = { ready: "New", approved: "To post", posted: "Posted", skipped: "Skipped" };
 
-async function load() {
-  try { D = await call("list"); render(); }
-  catch (e) { if (e.status === 401) return logout("Wrong password"); $("#status").textContent = "can't reach the server, retrying"; }
+/* 3D tilt + moving specular, same as Studio */
+function tilt(nodes) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches || matchMedia("(hover: none)").matches) return;
+  nodes.forEach((n) => {
+    const cur = { x: .5, y: .5, lift: 0 }, tgt = { x: .5, y: .5, lift: 0 }; let raf = 0;
+    const step = () => {
+      const k = .12; cur.x += (tgt.x - cur.x) * k; cur.y += (tgt.y - cur.y) * k; cur.lift += (tgt.lift - cur.lift) * k;
+      n.style.transform = `perspective(1100px) rotateX(${(.5 - cur.y) * 5 * cur.lift}deg) rotateY(${(cur.x - .5) * 6 * cur.lift}deg) translateY(${-4 * cur.lift}px) scale(${1 + .012 * cur.lift})`;
+      n.style.setProperty("--mx", cur.x * 100 + "%"); n.style.setProperty("--my", cur.y * 100 + "%");
+      const done = Math.abs(tgt.x - cur.x) + Math.abs(tgt.y - cur.y) + Math.abs(tgt.lift - cur.lift) < .002;
+      raf = done ? 0 : requestAnimationFrame(step); if (done && !tgt.lift) n.style.transform = "";
+    };
+    const kick = () => { if (!raf) raf = requestAnimationFrame(step); };
+    n.style.transition = "box-shadow .7s cubic-bezier(.22,1,.36,1)";
+    n.addEventListener("pointermove", (e) => { const r = n.getBoundingClientRect(); tgt.x = (e.clientX - r.left) / r.width; tgt.y = (e.clientY - r.top) / r.height; tgt.lift = 1; kick(); });
+    n.addEventListener("pointerleave", () => { tgt.x = .5; tgt.y = .5; tgt.lift = 0; kick(); });
+  });
+}
+
+function embedUrl(url) {
+  const yt = url.match(/(?:v=|youtu\.be\/|\/live\/)([\w-]{11})/);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1&mute=1&playsinline=1`;
+  const tw = url.match(/twitch\.tv\/(\w+)/);
+  if (tw) return `https://player.twitch.tv/?channel=${tw[1]}&parent=${location.hostname}&muted=true`;
+  return null;
+}
+async function load() { try { D = await call("list"); render(); } catch { $("#bigSub").textContent = "can't reach the clipper, retrying"; } }
+
+function renderHero() {
+  const live = D.streams.filter(isLive);
+  const n = D.clips.filter((c) => bucket(c) === F).length;
+  $("#bigCount").textContent = n;
+  $("#bigUnit").textContent = { ready: "new clips", approved: "to post", posted: "posted", skipped: "skipped" }[F];
+  $("#bigSub").textContent = live.length ? `clipping ${live.map((s) => srcOf(s)?.name || "a stream").join(", ")} live` : "nobody live right now";
+  const today = D.clips.filter((c) => Date.now() - Date.parse(c.created_at) < 864e5).length;
+  const post = D.clips.filter((c) => bucket(c) === "approved").length, done = D.clips.filter((c) => bucket(c) === "posted").length, waiting = D.clips.filter((c) => bucket(c) === "ready").length;
+  const max = Math.max(1, today, waiting, post, done);
+  $("#pipeline").innerHTML = [["Clipped today", today], ["Waiting on you", waiting], ["To post", post], ["Posted", done]]
+    .map(([k, v]) => `<div class="stage"><span><em>${k}</em><b>${v}</b></span><div class="bar"><i style="width:${(100 * v / max).toFixed(0)}%"></i></div></div>`).join("");
+}
+function renderLive() {
+  const live = D.streams.filter(isLive);
+  if (!live.find((s) => s.id === watching)) watching = live[0]?.id || null;
+  const s = live.find((x) => x.id === watching), screen = $("#screen");
+  $("#switch").innerHTML = live.length > 1 ? live.map((x) => `<button class="tog" data-w="${esc(x.id)}" aria-pressed="${x.id === watching}">${esc(srcOf(x)?.name || "stream")}</button>`).join("") : "";
+  if (!s) {
+    screen.querySelector("iframe")?.remove(); screen.querySelector(".badge")?.remove(); embedded = null;
+    $("#off").hidden = false; $("#liveChips").innerHTML = `<span class="chip">Watching</span>`; $("#streamTitle").textContent = "Waiting for a live stream";
+    $("#sNext").textContent = "-"; $("#scanBar").style.width = "0"; return;
+  }
+  const u = embedUrl(s.url);
+  if (u && embedded !== u) {
+    screen.querySelector("iframe")?.remove(); screen.querySelector(".badge")?.remove();
+    screen.insertAdjacentHTML("beforeend", `<div class="badge"><span class="pill blue">Live</span><span class="pill">${esc(srcOf(s)?.name || "")}</span></div><iframe src="${esc(u)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="Live stream"></iframe>`);
+    embedded = u;
+  }
+  $("#off").hidden = !!u;
+  const found = D.clips.filter((c) => c.stream_id === s.id).length;
+  $("#liveChips").innerHTML = `<span class="chip trial">${esc(srcOf(s)?.name || "Live")}</span><span class="chip mono">${tc(s.checked_to)} scanned</span><span class="chip">${found} clip${found === 1 ? "" : "s"}</span>`;
+  $("#streamTitle").textContent = s.title || s.url;
+  tick();
+}
+function tick() {
+  const s = D.streams.find((x) => x.id === watching && isLive(x));
+  if (!s) return;
+  if (!s.runner_seen_at) { $("#sNext").textContent = "starting"; return; }
+  const since = (Date.now() - Date.parse(s.runner_seen_at)) / 1000, left = Math.max(0, SCAN_EVERY - (since % SCAN_EVERY));
+  $("#sNext").textContent = since > SCAN_EVERY * 3 ? "reconnecting" : `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")}`;
+  $("#scanBar").style.width = (100 * (1 - left / SCAN_EVERY)).toFixed(1) + "%";
+}
+function renderSlots() {
+  const list = D.clips.filter((c) => bucket(c) === F);
+  $("#slots").innerHTML = list.map((c) => {
+    const b = bucket(c), who = srcOf(streamOf(c))?.name || "";
+    return `<article class="card glass" data-id="${esc(c.id)}" tabindex="0">
+      <div class="thumb"><img src="${esc(c.thumb_url)}?v=${Date.parse(c.created_at) || 0}" alt="" loading="lazy">
+        <div class="badge"><span class="pill ${b === "approved" ? "blue" : ""}">${LABEL[b]}</span></div><span class="pill time mono">${Number(c.duration || 0).toFixed(0)}s</span></div>
+      <h3>${esc(c.title)}</h3>
+      <div class="meta"><span>${esc(who)} · ${tc(c.t)}</span><span class="st" data-s="${b}"><i></i>${ago(c.created_at)}</span></div></article>`;
+  }).join("") || `<div class="empty glass">${F === "ready" ? "No new clips yet. They land here a few minutes after someone you watch goes live." : "Nothing here yet."}</div>`;
+  tilt(document.querySelectorAll(".card"));
 }
 function render() {
-  const live = D.streams.filter((s) => ["live", "capturing"].includes(s.status));
-  const liveSrc = new Set(live.map((s) => s.source_id));
-  $("#liveDot").classList.toggle("on", live.length > 0);
-  $("#status").textContent = live.length ? `clipping ${live.length} live stream${live.length > 1 ? "s" : ""}` : "no one live right now";
-  $("#creators").innerHTML = D.sources.map((s) => `<div class="cr"><i class="rec ${liveSrc.has(s.id) ? "on" : ""}"></i>${esc(s.name)}<small>${s.platform === "twitch" ? "Twitch" : "YouTube"}</small></div>`).join("") || `<span class="status">nobody yet</span>`;
-  $("#streams").innerHTML = D.streams.slice(0, 6).map((s) => {
-    const n = D.clips.filter((c) => c.stream_id === s.id).length, on = ["live", "capturing"].includes(s.status);
-    return `<div class="st"><b>${esc(s.title || s.url)}</b><span class="${on ? "live" : ""}">${on ? "● clipping live" : esc(s.status)}</span> <span>· ${n} clip${n === 1 ? "" : "s"} · ${tc(s.checked_to)} scanned · ${ago(s.created_at)}</span></div>`;
-  }).join("");
-  for (const k of ["ready", "approved", "posted", "skipped"]) $("#n-" + k).textContent = D.clips.filter((c) => bucket(c) === k).length;
-  $("#tabs").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.f === F));
-  $("#headline").textContent = { ready: "New clips", approved: "Going out next", posted: "Posted", skipped: "Skipped" }[F];
-  const list = D.clips.filter((c) => bucket(c) === F);
-  $("#grid").innerHTML = list.map((c) => `<button class="card" data-id="${esc(c.id)}">
-      <div class="thumb"><img src="${esc(c.thumb_url)}" alt="" loading="lazy"><span class="chip ${bucket(c)}">${bucket(c) === "ready" ? "new" : bucket(c) === "approved" ? "to post" : bucket(c)}</span><span class="tc">${Number(c.duration || 0).toFixed(0)}s</span></div>
-      <b>${esc(c.title)}</b><span>at ${tc(c.t)} · score ${Number(c.score || 0).toFixed(1)} · ${ago(c.created_at)}</span></button>`).join("")
-    || `<div class="empty">${F === "ready" ? "No new clips. They show up a few minutes after someone you watch goes live." : "Nothing here."}</div>`;
+  document.querySelectorAll("#tabs button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.f === F));
+  renderHero(); renderLive(); renderSlots(); renderConn();
+  if (current && !$("#sheet").hidden) fillSheet(current, false);
 }
-function open(id) {
+/* clip sheet */
+function fillSheet(id, fresh = true) {
   const c = D.clips.find((x) => x.id === id); if (!c) return;
-  const s = D.streams.find((x) => x.id === c.stream_id), b = bucket(c);
-  const acts = b === "posted" ? `<p class="status">Sent to YouTube ${c.posted_at ? ago(c.posted_at) : ""}</p>`
-    : `<div class="acts">${b !== "approved" ? `<button class="btn tally" data-s="approved">Post this</button>` : `<button class="btn ghost" data-s="ready">Don't post</button>`}${b !== "skipped" ? `<button class="btn ghost" data-s="skipped">Skip</button>` : ""}<a class="btn ghost" style="display:inline-flex;align-items:center;text-decoration:none" href="${esc(c.video_url)}" target="_blank" rel="noopener">Open video</a></div>`;
-  $("#dlgBody").innerHTML = `<div class="player"><video src="${esc(c.video_url)}" poster="${esc(c.thumb_url)}" controls playsinline autoplay></video>
-    <div><h2>${esc(c.title)}</h2><dl class="meta">
-      <dt>stream</dt><dd>${esc(s?.title || s?.url || "")}</dd><dt>moment</dt><dd>${tc(c.t)} into the stream</dd>
-      <dt>length</dt><dd>${Number(c.duration || 0).toFixed(1)}s</dd><dt>why</dt><dd>score ${Number(c.score || 0).toFixed(1)} from ${esc((c.why || []).join(", ") || "audio")}</dd>
-      <dt>status</dt><dd>${b === "ready" ? "new" : b === "approved" ? "goes out next" : b}</dd></dl>${acts}</div></div>`;
-  $("#dlgBody").querySelectorAll("[data-s]").forEach((btn) => btn.onclick = async () => {
-    try { await call("set", { id: c.id, status: btn.dataset.s }); toast(btn.dataset.s === "approved" ? "Queued to post" : btn.dataset.s === "skipped" ? "Skipped" : "Moved back to new"); }
-    catch { toast("Didn't save, try again"); }
-    $("#dlg").close(); load();
-  });
-  $("#dlg").showModal();
+  const s = streamOf(c), b = bucket(c);
+  if (fresh) { const v = $("#clipVideo"); v.src = c.video_url + "?v=" + (Date.parse(c.created_at) || 0); v.poster = c.thumb_url; v.play().catch(() => {}); }
+  $("#clipLen").textContent = Number(c.duration || 0).toFixed(1) + "s"; $("#clipOpen").href = c.video_url;
+  $("#cCreator").textContent = srcOf(s)?.name || "Clip"; $("#cAt").textContent = tc(c.t) + " in"; $("#cScore").textContent = "score " + Number(c.score || 0).toFixed(1);
+  $("#sheetTitle").textContent = c.title;
+  $("#cFacts").innerHTML = [["Stream", esc(s?.title || s?.url || "")], ["Why", "loud moment" + ((c.why || []).includes("chat") ? " + chat spike" : "")], ["Length", Number(c.duration || 0).toFixed(1) + " seconds"]]
+    .map(([k, v]) => `<li><b>${k}</b><span>${v}</span></li>`).join("");
+  const posted = b === "posted";
+  $("#cStatus").innerHTML = (posted ? ["posted"] : ["ready", "approved", "skipped"]).map((k) => `<button type="button" data-s="${k}" aria-pressed="${k === b}" ${posted ? "disabled" : ""}>${LABEL[k]}</button>`).join("");
+  $("#cPost").hidden = posted || b === "approved"; $("#cSkip").hidden = posted || b === "skipped";
+  $("#cNote").textContent = posted ? `Sent to YouTube ${c.posted_at ? ago(c.posted_at) : ""}` : b === "approved" ? "Goes out on the next post." : "Post this sends it to the YouTube queue.";
 }
-$("#dlg").addEventListener("close", () => { const v = $("#dlgBody video"); if (v) v.pause(); });
-$("#close").onclick = () => $("#dlg").close();
-$("#grid").addEventListener("click", (e) => { const c = e.target.closest("[data-id]"); if (c) open(c.dataset.id); });
+function openSheet(id) { current = id; fillSheet(id); $("#scrim").hidden = false; $("#sheet").hidden = false; }
+function closeAll() { $("#scrim").hidden = true; $("#sheet").hidden = true; $("#addSheet").hidden = true; $("#clipVideo").pause(); current = null; }
+async function setStatus(st) {
+  const id = current; if (!id) return;
+  try { await call("set", { id, status: st }); toast(st === "approved" ? "Queued to post" : st === "skipped" ? "Skipped" : "Moved back to new"); }
+  catch { toast("Didn't save, try again"); return; }
+  closeAll(); load();
+}
+/* creators sheet */
+function renderConn() {
+  const live = new Set(D.streams.filter(isLive).map((s) => s.source_id));
+  $("#conn").innerHTML = D.sources.map((s) => `<div><span style="display:flex;align-items:center;gap:8px"><i class="lv ${live.has(s.id) ? "on" : ""}"></i>${esc(s.name)}</span><em class="${live.has(s.id) ? "on" : ""}">${live.has(s.id) ? "live now" : s.platform === "twitch" ? "Twitch" : "YouTube"}</em></div>`).join("") || `<div>Nobody yet</div>`;
+}
+function openAdd(focus) { $("#scrim").hidden = false; $("#addSheet").hidden = false; $("#addNote").textContent = ""; setTimeout(() => $(focus).focus(), 50); }
+
 $("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { F = b.dataset.f; render(); } });
-$("#addCreator").onsubmit = async (e) => {
-  e.preventDefault(); const raw = $("#handle").value.trim(), plat = $("#plat").value, name = raw.replace(/^@/, "");
-  try { await call("source", { name, platform: plat, handle: plat === "youtube" ? "@" + name : name.toLowerCase() }); $("#handle").value = ""; toast("Watching " + name); load(); }
-  catch { toast("Didn't save, try again"); }
+$("#slots").addEventListener("click", (e) => { const c = e.target.closest("[data-id]"); if (c) openSheet(c.dataset.id); });
+$("#slots").addEventListener("keydown", (e) => { const c = e.target.closest("[data-id]"); if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openSheet(c.dataset.id); } });
+$("#switch").addEventListener("click", (e) => { const b = e.target.closest("[data-w]"); if (b) { watching = b.dataset.w; renderLive(); } });
+$("#cStatus").addEventListener("click", (e) => { const b = e.target.closest("[data-s]"); if (b && b.getAttribute("aria-pressed") !== "true") setStatus(b.dataset.s); });
+$("#cPost").onclick = () => setStatus("approved");
+$("#cSkip").onclick = () => setStatus("skipped");
+$("#closeSheet").onclick = closeAll; $("#closeAdd").onclick = closeAll; $("#scrim").onclick = closeAll;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAll(); });
+$("#openAdd").onclick = () => openAdd("#handle"); $("#openCreators").onclick = () => openAdd("#handle"); $("#openLink").onclick = () => openAdd("#url");
+$("#plat").addEventListener("click", (e) => { const b = e.target.closest("[data-p]"); if (!b) return; plat = b.dataset.p; $("#plat").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b)); });
+$("#addCreator").onclick = async () => {
+  const name = $("#handle").value.trim().replace(/^@/, ""); if (!name) return ($("#addNote").textContent = "Type a handle first.");
+  try { await call("source", { name, platform: plat, handle: plat === "youtube" ? "@" + name : name.toLowerCase() }); $("#handle").value = ""; $("#addNote").textContent = `Watching ${name}. Clips start when they go live.`; load(); }
+  catch { $("#addNote").textContent = "Didn't save, try again."; }
 };
-$("#addStream").onsubmit = async (e) => {
-  e.preventDefault();
-  try { await call("stream", { url: $("#url").value.trim() }); $("#url").value = ""; toast("Clipping it, first clips in about 10 min"); load(); }
-  catch (err) { toast(err.message === "paste a YouTube or Twitch link" ? "Paste a YouTube or Twitch link" : "Didn't save, try again"); }
+$("#addStream").onclick = async () => {
+  const u = $("#url").value.trim(); if (!u) return ($("#addNote").textContent = "Paste a link first.");
+  try { await call("stream", { url: u }); $("#url").value = ""; $("#addNote").textContent = "Clipping it. First clips land in about 10 minutes."; load(); }
+  catch (err) { $("#addNote").textContent = err.message === "paste a YouTube or Twitch link" ? "That isn't a YouTube or Twitch link." : "Didn't save, try again."; }
 };
-function logout(msg) { store.del("clipdesk"); KEY = ""; $("#app").hidden = true; $("#gate").hidden = false; $("#err").textContent = msg || ""; }
-async function enter(k) {
-  KEY = k.trim().toLowerCase();
-  try { D = await call("list"); } catch (e) { return logout(e.status === 401 ? "Wrong password" : "Can't reach the server"); }
-  store.set("clipdesk", KEY); $("#gate").hidden = true; $("#app").hidden = false; render();
-}
-$("#login").onsubmit = (e) => { e.preventDefault(); enter($("#pw").value); };
-const saved = store.get("clipdesk"); if (saved) enter(saved);
-setInterval(() => { if (KEY && !document.hidden) load(); }, 60000);
+tilt(document.querySelectorAll(".count,.pipeline,.live"));
+load();
+setInterval(() => { if (!document.hidden) load(); }, 30000);
+setInterval(tick, 1000);
 </script>
 </body>
 </html>

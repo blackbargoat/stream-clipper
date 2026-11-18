@@ -15,8 +15,18 @@ def is_emoji(ch):
 
 
 def main(text, out, seam=608):
-    lines = text.split("|") if "|" in text else [text]
-    size = 58 if len(lines) == 1 and len(text) <= 26 else 54
+    # One wide line (a short, flat box), shrinking the font to fit; two lines only if it still won't fit at 40px.
+    if "|" not in text:
+        for size in range(56, 39, -2):
+            F = ImageFont.truetype(FONT, size)
+            if F.getlength(text) + size * 1.2 * sum(map(is_emoji, text)) + 2 * 30 <= 1000:
+                break
+        else:
+            ws = text.split(); cut = min(range(1, len(ws)), key=lambda i: abs(len(" ".join(ws[:i])) - len(" ".join(ws[i:]))))
+            text = " ".join(ws[:cut]) + "|" + " ".join(ws[cut:])
+    lines = text.split("|")
+    if len(lines) > 1:
+        size = 46
     F = ImageFont.truetype(FONT, size)
     try:
         E = ImageFont.truetype(EMOJI, 109)  # Noto Color Emoji
@@ -47,7 +57,7 @@ def main(text, out, seam=608):
 
     L = [runs(l.strip()) for l in lines]
     width = lambda l: sum(F.getlength(s) if k == "t" else emoji(s).width + 6 for s, k in l)
-    lh, pw, ph = size + 18, 36, 24
+    lh, pw, ph = size + 12, 30, 16  # tight vertical padding keeps the box flat
     W = int(max(width(l) for l in L)) + 2 * pw
     H = lh * len(L) + 2 * ph
     c = Image.new("RGBA", (1080, 1920), (0, 0, 0, 0))
