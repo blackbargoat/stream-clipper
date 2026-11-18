@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clip Desk</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Broadcast control desk: dark ink, one warm tally-orange accent, monospace timecodes. */
+:root{
+  --ink:#0d0e10; --panel:#16171a; --raise:#1f2024; --line:#2a2b30;
+  --fg:#f4f3ef; --dim:#a9a7a0; --tally:#ff8a1f; --ok:#4cc38a; --idle:#4a4b52;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Inter",ui-sans-serif,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--ink);color:var(--fg);font:15px/1.5 var(--body)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+:focus-visible{outline:2px solid var(--tally);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.brand{font:800 26px/1 var(--display);letter-spacing:-.5px;display:flex;align-items:center;gap:10px}
+.rec{width:12px;height:12px;border-radius:50%;background:var(--idle)}
+.rec.on{background:var(--tally);animation:blink 1.4s steps(2) infinite}
+@keyframes blink{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.rec.on{animation:none}}
+.status{font:500 13px var(--mono);color:var(--dim)}
+.cols{display:grid;grid-template-columns:320px 1fr;gap:24px;margin-top:24px;align-items:start}
+@media (max-width:880px){.cols{grid-template-columns:1fr}}
+.side{display:grid;gap:16px;min-width:0}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+.lbl{font:700 11px var(--mono);letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);margin:0 0 12px}
+.creators{display:grid;gap:6px}
+.cr{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;background:var(--raise);font-weight:600}
+.cr .rec{width:9px;height:9px}
+.cr small{margin-left:auto;font:500 12px var(--mono);color:var(--dim)}
+form.row{display:flex;gap:8px;margin-top:10px}
+form.row input,form.row select{min-width:0;flex:1;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--ink);padding:0 12px}
+form.row select{flex:0 0 96px}
+.btn{height:42px;padding:0 16px;border-radius:10px;background:var(--fg);color:var(--ink);font-weight:700;white-space:nowrap}
+.btn.tally{background:var(--tally);color:#1a0d00}
+.btn.ghost{background:var(--raise);color:var(--fg)}
+.streams{display:grid;gap:8px;margin-top:12px}
+.st{padding:10px 12px;border-radius:10px;background:var(--raise);font-size:13px;min-width:0}
+.st b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st span{font:500 12px var(--mono);color:var(--dim)}
+.st .live{color:var(--tally)}
+.main h1{font:800 clamp(28px,4vw,40px)/1.05 var(--display);letter-spacing:-1px;margin:0;text-wrap:balance}
+.bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.tabs{display:flex;gap:4px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;flex-wrap:wrap}
+.tabs button{height:34px;padding:0 12px;border-radius:8px;font-weight:600;font-size:13px;color:var(--dim)}
+.tabs button[aria-pressed=true]{background:var(--raise);color:var(--fg)}
+.tabs i{font-style:normal;font:500 11px var(--mono);margin-left:6px;color:var(--dim)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+.card{display:grid;gap:8px;text-align:left;min-width:0}
+.thumb{position:relative;aspect-ratio:9/16;max-width:100%;border-radius:12px;overflow:hidden;background:var(--raise);border:1px solid var(--line)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.chip{position:absolute;top:8px;left:8px;font:700 10px var(--mono);letter-spacing:.8px;text-transform:uppercase;padding:4px 7px;border-radius:6px;background:var(--fg);color:var(--ink)}
+.chip.approved{background:var(--tally);color:#1a0d00}.chip.posted,.chip.scheduled{background:var(--ok);color:#06180f}.chip.skipped{background:var(--idle);color:var(--fg)}
+.tc{position:absolute;bottom:8px;right:8px;font:700 11px var(--mono);padding:3px 6px;border-radius:6px;background:rgba(13,14,16,.85)}
+.card b{font-weight:600;font-size:14px;line-height:1.3}
+.card span{font:500 12px var(--mono);color:var(--dim)}
+.empty{grid-column:1/-1;padding:40px 16px;text-align:center;color:var(--dim);border:1px dashed var(--line);border-radius:14px}
+dialog{border:0;padding:0;background:transparent;color:var(--fg);max-width:min(980px,calc(100vw - 24px));width:100%}
+dialog::backdrop{background:rgba(5,5,6,.82)}
+.player{display:grid;grid-template-columns:minmax(0,380px) 1fr;gap:20px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+@media (max-width:720px){.player{grid-template-columns:1fr}}
+.player video{width:100%;max-height:78vh;aspect-ratio:9/16;border-radius:12px;background:#000;display:block}
+.player h2{font:800 24px/1.15 var(--display);margin:0 0 10px;text-wrap:balance}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;margin:0 0 18px}
+.meta dt{font:500 12px var(--mono);color:var(--dim)}.meta dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.x{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;background:var(--raise);font-size:18px}
+.gate{min-height:100vh;display:grid;place-items:center;padding:16px}
+.gate form{width:min(360px,100%);display:grid;gap:12px}
+.gate h1{font:800 34px/1 var(--display);margin:0 0 6px;display:flex;gap:10px;align-items:center}
+.gate p{color:var(--dim);margin:0 0 6px}
+.gate input{height:48px;border-radius:12px;border:1px solid var(--line);background:var(--panel);padding:0 14px}
+.err{color:var(--tally);font-size:13px;min-height:18px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--ink);font-weight:700;padding:10px 16px;border-radius:10px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div id="gate" class="gate"><form id="login">
+  <h1><i class="rec on"></i>Clip Desk</h1>
+  <p>Stream clips waiting for review.</p>
+  <label for="pw" class="lbl" style="margin:0">Password</label>
+  <input id="pw" type="password" autocomplete="current-password" required>
+  <button class="btn tally" type="submit">Open</button>
+  <div class="err" id="err"></div>
+</form></div>
+
+<div id="app" class="wrap" hidden>
+  <header>
+    <div class="brand"><i class="rec" id="liveDot"></i>Clip Desk</div>
+    <div class="status" id="status">loading</div>
+  </header>
+  <div class="cols">
+    <aside class="side">
+      <section class="box">
+        <h2 class="lbl">Watching</h2>
+        <div class="creators" id="creators"></div>
+        <form class="row" id="addCreator">
+          <select id="plat" aria-label="Platform"><option value="youtube">YouTube</option><option value="twitch">Twitch</option></select>
+          <input id="handle" placeholder="@handle" aria-label="Creator handle" required>
+          <button class="btn" type="submit">Add</button>
+        </form>
+      </section>
+      <section class="box">
+        <h2 class="lbl">Clip a stream</h2>
+        <form class="row" id="addStream">
+          <input id="url" placeholder="YouTube or Twitch link" aria-label="Stream link" required>
+          <button class="btn" type="submit">Clip</button>
+        </form>
+        <div class="streams" id="streams"></div>
+      </section>
+    </aside>
+    <main class="main">
+      <div class="bar">
+        <h1 id="headline">Clips</h1>
+        <div class="tabs" id="tabs">
+          <button data-f="ready" aria-pressed="true">New<i id="n-ready"></i></button>
+          <button data-f="approved" aria-pressed="false">To post<i id="n-approved"></i></button>
+          <button data-f="posted" aria-pressed="false">Posted<i id="n-posted"></i></button>
+          <button data-f="skipped" aria-pressed="false">Skipped<i id="n-skipped"></i></button>
+        </div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </main>
+  </div>
+</div>
+
+<dialog id="dlg"><div style="position:relative"><button class="x" id="close" aria-label="Close">×</button><div id="dlgBody"></div></div></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+const FN = "https://etdbjahwegsmuelcawgf.supabase.co/functions/v1/clips/";
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let KEY = "", D = { sources: [], streams: [], clips: [] }, F = "ready";
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }, del: (k) => { try { localStorage.removeItem(k); } catch {} } };
+async function call(route, body = {}) {
+  const r = await fetch(FN + route, { method: "POST", headers: { "content-type": "application/json", "x-site-key": KEY }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(j.error || "HTTP " + r.status); e.status = r.status; throw e; }
+  return j;
+}
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 2200); }
+const tc = (s) => { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ":" : "") + String(m).padStart(2, "0") + ":" + String(x).padStart(2, "0"); };
+const ago = (iso) => { const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)); return m < 60 ? m + "m ago" : m < 1440 ? Math.round(m / 60) + "h ago" : Math.round(m / 1440) + "d ago"; };
+const bucket = (c) => c.status === "scheduled" ? "posted" : c.status;
+
+async function load() {
+  try { D = await call("list"); render(); }
+  catch (e) { if (e.status === 401) return logout("Wrong password"); $("#status").textContent = "can't reach the server, retrying"; }
+}
+function render() {
+  const live = D.streams.filter((s) => ["live", "capturing"].includes(s.status));
+  const liveSrc = new Set(live.map((s) => s.source_id));
+  $("#liveDot").classList.toggle("on", live.length > 0);
+  $("#status").textContent = live.length ? `clipping ${live.length} live stream${live.length > 1 ? "s" : ""}` : "no one live right now";
+  $("#creators").innerHTML = D.sources.map((s) => `<div class="cr"><i class="rec ${liveSrc.has(s.id) ? "on" : ""}"></i>${esc(s.name)}<small>${s.platform === "twitch" ? "Twitch" : "YouTube"}</small></div>`).join("") || `<span class="status">nobody yet</span>`;
+  $("#streams").innerHTML = D.streams.slice(0, 6).map((s) => {
+    const n = D.clips.filter((c) => c.stream_id === s.id).length, on = ["live", "capturing"].includes(s.status);
+    return `<div class="st"><b>${esc(s.title || s.url)}</b><span class="${on ? "live" : ""}">${on ? "● clipping live" : esc(s.status)}</span> <span>· ${n} clip${n === 1 ? "" : "s"} · ${tc(s.checked_to)} scanned · ${ago(s.created_at)}</span></div>`;
+  }).join("");
+  for (const k of ["ready", "approved", "posted", "skipped"]) $("#n-" + k).textContent = D.clips.filter((c) => bucket(c) === k).length;
+  $("#tabs").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.f === F));
+  $("#headline").textContent = { ready: "New clips", approved: "Going out next", posted: "Posted", skipped: "Skipped" }[F];
+  const list = D.clips.filter((c) => bucket(c) === F);
+  $("#grid").innerHTML = list.map((c) => `<button class="card" data-id="${esc(c.id)}">
+      <div class="thumb"><img src="${esc(c.thumb_url)}" alt="" loading="lazy"><span class="chip ${bucket(c)}">${bucket(c) === "ready" ? "new" : bucket(c) === "approved" ? "to post" : bucket(c)}</span><span class="tc">${Number(c.duration || 0).toFixed(0)}s</span></div>
+      <b>${esc(c.title)}</b><span>at ${tc(c.t)} · score ${Number(c.score || 0).toFixed(1)} · ${ago(c.created_at)}</span></button>`).join("")
+    || `<div class="empty">${F === "ready" ? "No new clips. They show up a few minutes after someone you watch goes live." : "Nothing here."}</div>`;
+}
+function open(id) {
+  const c = D.clips.find((x) => x.id === id); if (!c) return;
+  const s = D.streams.find((x) => x.id === c.stream_id), b = bucket(c);
+  const acts = b === "posted" ? `<p class="status">Sent to YouTube ${c.posted_at ? ago(c.posted_at) : ""}</p>`
+    : `<div class="acts">${b !== "approved" ? `<button class="btn tally" data-s="approved">Post this</button>` : `<button class="btn ghost" data-s="ready">Don't post</button>`}${b !== "skipped" ? `<button class="btn ghost" data-s="skipped">Skip</button>` : ""}<a class="btn ghost" style="display:inline-flex;align-items:center;text-decoration:none" href="${esc(c.video_url)}" target="_blank" rel="noopener">Open video</a></div>`;
+  $("#dlgBody").innerHTML = `<div class="player"><video src="${esc(c.video_url)}" poster="${esc(c.thumb_url)}" controls playsinline autoplay></video>
+    <div><h2>${esc(c.title)}</h2><dl class="meta">
+      <dt>stream</dt><dd>${esc(s?.title || s?.url || "")}</dd><dt>moment</dt><dd>${tc(c.t)} into the stream</dd>
+      <dt>length</dt><dd>${Number(c.duration || 0).toFixed(1)}s</dd><dt>why</dt><dd>score ${Number(c.score || 0).toFixed(1)} from ${esc((c.why || []).join(", ") || "audio")}</dd>
+      <dt>status</dt><dd>${b === "ready" ? "new" : b === "approved" ? "goes out next" : b}</dd></dl>${acts}</div></div>`;
+  $("#dlgBody").querySelectorAll("[data-s]").forEach((btn) => btn.onclick = async () => {
+    try { await call("set", { id: c.id, status: btn.dataset.s }); toast(btn.dataset.s === "approved" ? "Queued to post" : btn.dataset.s === "skipped" ? "Skipped" : "Moved back to new"); }
+    catch { toast("Didn't save, try again"); }
+    $("#dlg").close(); load();
+  });
+  $("#dlg").showModal();
+}
+$("#dlg").addEventListener("close", () => { const v = $("#dlgBody video"); if (v) v.pause(); });
+$("#close").onclick = () => $("#dlg").close();
+$("#grid").addEventListener("click", (e) => { const c = e.target.closest("[data-id]"); if (c) open(c.dataset.id); });
+$("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { F = b.dataset.f; render(); } });
+$("#addCreator").onsubmit = async (e) => {
+  e.preventDefault(); const raw = $("#handle").value.trim(), plat = $("#plat").value, name = raw.replace(/^@/, "");
+  try { await call("source", { name, platform: plat, handle: plat === "youtube" ? "@" + name : name.toLowerCase() }); $("#handle").value = ""; toast("Watching " + name); load(); }
+  catch { toast("Didn't save, try again"); }
+};
+$("#addStream").onsubmit = async (e) => {
+  e.preventDefault();
+  try { await call("stream", { url: $("#url").value.trim() }); $("#url").value = ""; toast("Clipping it, first clips in about 10 min"); load(); }
+  catch (err) { toast(err.message === "paste a YouTube or Twitch link" ? "Paste a YouTube or Twitch link" : "Didn't save, try again"); }
+};
+function logout(msg) { store.del("clipdesk"); KEY = ""; $("#app").hidden = true; $("#gate").hidden = false; $("#err").textContent = msg || ""; }
+async function enter(k) {
+  KEY = k.trim().toLowerCase();
+  try { D = await call("list"); } catch (e) { return logout(e.status === 401 ? "Wrong password" : "Can't reach the server"); }
+  store.set("clipdesk", KEY); $("#gate").hidden = true; $("#app").hidden = false; render();
+}
+$("#login").onsubmit = (e) => { e.preventDefault(); enter($("#pw").value); };
+const saved = store.get("clipdesk"); if (saved) enter(saved);
+setInterval(() => { if (KEY && !document.hidden) load(); }, 60000);
+</script>
+</body>
+</html>
