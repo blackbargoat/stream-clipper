@@ -269,6 +269,11 @@ def run_vod(row, n_clips=10):
             make_clip(row, src, m["t"] - a, m["t"], m["score"], m["why"])
         except Exception as e:  # noqa: BLE001
             log(f"  moment {m['t']} failed: {e}")
+        finally:
+            for f in glob.glob(os.path.join(WORK, f"src_{m['t']}*")):
+                os.remove(f)
+    for f in glob.glob(os.path.join(WORK, "vod.*")):  # the whole-stream audio is big; done with it
+        os.remove(f)
     heartbeat(sid, status="done")
 
 
