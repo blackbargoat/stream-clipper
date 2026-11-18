@@ -1,0 +1,25 @@
+name: Watch for live streams
+# Every ~5 min: checks the creators in clip_sources and the links pasted on the website, and starts a capture job
+# for each live stream. Keeps itself going (GitHub's cron skips runs). Public repo, so minutes are free.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+concurrency: { group: watch, cancel-in-progress: false }
+permissions: { contents: read, actions: write }
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: clipper }
+      - run: pip install -q -U yt-dlp
+      - run: python3 clipper/watch.py
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+      - name: Next check in ~4 min
+        if: ${{ always() }}
+        run: sleep 240 && gh workflow run watch.yml -R ${{ github.repository }}
+        env: { GH_TOKEN: "${{ github.token }}" }

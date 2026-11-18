@@ -1,0 +1,35 @@
+name: Capture and clip a stream
+# One job per stream: records the live (or reads the VOD), finds the moments, renders Shorts, uploads them.
+# A live job hands over after ~5h40m (GitHub's 6 h limit): it sets the stream back to 'live' and the watcher starts the next one.
+on:
+  workflow_dispatch:
+    inputs:
+      stream: { description: "clip_streams id", required: true }
+concurrency: { group: "capture-${{ inputs.stream }}", cancel-in-progress: false }
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: clipper/requirements.txt }
+      - uses: actions/cache@v4
+        with: { path: ~/ffmpeg-bin, key: ffmpeg-static-v1 }
+      - run: |
+          if [ ! -x ~/ffmpeg-bin/ffmpeg ]; then
+            mkdir -p ~/ffmpeg-bin && cd /tmp
+            curl -sSL --retry 3 -o ff.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
+              && tar xf ff.tar.xz && cp ffmpeg-*-static/ffmpeg ffmpeg-*-static/ffprobe ~/ffmpeg-bin/ \
+              || (sudo apt-get update -q && sudo apt-get install -yq ffmpeg && ln -sf "$(command -v ffmpeg)" ~/ffmpeg-bin/ffmpeg && ln -sf "$(command -v ffprobe)" ~/ffmpeg-bin/ffprobe)
+          fi
+          echo "$HOME/ffmpeg-bin" >> "$GITHUB_PATH"
+      - run: sudo apt-get install -yq fonts-noto-color-emoji >/dev/null 2>&1 || true
+      - run: pip install -q -r clipper/requirements.txt
+      - uses: actions/cache@v4
+        with: { path: ~/.cache/huggingface, key: whisper-base-en-v1 }
+      - run: python3 clipper/live.py --stream "${{ inputs.stream }}" --max-minutes 335
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          CLIP_WORKER_KEY: ${{ secrets.CLIP_WORKER_KEY }}
+          CLIP_WORK: /tmp/clipwork
