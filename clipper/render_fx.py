@@ -170,8 +170,9 @@ def render(src, peak, out, title=None, model="base.en", words=None):
 
     # decode the source for each segment in order, composite each frame, pipe to the encoder
     silent = os.path.join(tmp, "video.mp4")
+    rate_k = int(min(12000, (46 * 8 * 1000) / max(total, 1) - 200))   # kbit/s: as high as the 50 MB storage cap allows
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-                            "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-maxrate", "6.4M", "-bufsize", "12M", "-pix_fmt", "yuv420p", silent],
+                            "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-maxrate", f"{rate_k}k", "-bufsize", f"{rate_k * 2}k", "-pix_fmt", "yuv420p", silent],
                            stdin=subprocess.PIPE)
     fi = 0
     for a, b in segs:
@@ -190,11 +191,12 @@ def render(src, peak, out, title=None, model="base.en", words=None):
             frame = np.zeros((H, W, 3), np.uint8)
             if layout == "cam+game":
                 # head lock: crop a box of the cam's aspect centred on the face, kept inside the cam overlay
-                zoom = 1.12 + punch
+                zoom = 1.0 + punch
                 cwid = bw / zoom; chei = cwid * ch / W
                 cx0 = min(max(fx - cwid / 2, bx), bx + bw - cwid); cy0 = min(max(fy - chei * 0.45, by), by + bh - chei)
                 camc = src_f[int(cy0):int(cy0 + chei), int(cx0):int(cx0 + cwid)]
-                frame[:ch] = cv2.resize(camc, (W, ch), interpolation=cv2.INTER_LANCZOS4)
+                up = cv2.resize(camc, (W, ch), interpolation=cv2.INTER_LANCZOS4)
+                frame[:ch] = cv2.addWeighted(up, 1.45, cv2.GaussianBlur(up, (0, 0), 2.2), -0.45, 0)   # unsharp mask
                 gw = int(sh_ * W / gh); gx = int(min(max((sw - gw) / 2, 0), sw - gw))
                 frame[ch:] = cv2.resize(src_f[:, gx:gx + gw], (W, gh), interpolation=cv2.INTER_AREA)
                 cap_y = ch

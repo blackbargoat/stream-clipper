@@ -114,7 +114,7 @@ def cut(pieces_dir, a, b, dst):
         for p in files:
             f.write(f"file '{p}'\n")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", lst, "-ss", str(a - i0 * SEG), "-t", str(b - a),
-                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-c:a", "aac", "-b:a", "192k", dst], check=True)
+                    "-c:v", "libx264", "-preset", "fast", "-crf", "10", "-c:a", "aac", "-b:a", "256k", dst], check=True)   # near-lossless intermediate
 
 
 def make_clip(row, src, peak_in_src, t_abs, sc, why, capture_start=None):
