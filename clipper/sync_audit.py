@@ -74,7 +74,7 @@ def audit(src, edge, capture_start, work):
         newest = _first_piece(edge["playlist"])[1] - 1
     except Exception:  # noqa: BLE001
         pass
-    ref = reference(edge, sq_mid - 45, min(sq_mid + 75, newest), work)
+    ref = reference(edge, sq_mid - 8, min(sq_mid + 42, newest), work)   # ~100 s around the clip: light on YouTube
     m = sync_ref.measure(src, ref)
     report = {"measured_early": m["audio_early"], "match": min(m["video_match"], m["audio_match"])}
     if report["match"] < 0.8:

@@ -11,5 +11,6 @@ while true; do
   ST=$(curl -s "https://etdbjahwegsmuelcawgf.supabase.co/rest/v1/clip_streams?id=eq.$SID&select=status" -H "apikey: $SUPABASE_SERVICE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_KEY")
   echo "$(date +%H:%M) stream status: $ST"
   case "$ST" in *done*) break;; esac
-  sleep 20
+  # YouTube blocked this connection (bot check): back off instead of hammering it, which only extends the block
+  case "$ST" in *waiting_home*) echo "$(date +%H:%M) YouTube is blocking this connection, waiting 20 min"; sleep 1200;; *) sleep 60;; esac
 done
