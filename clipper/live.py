@@ -17,7 +17,7 @@ import argparse, glob, json, os, re, shutil, socket, subprocess, sys, threading,
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import log, rest, upload, title_for, review_for, ytdlp_json  # noqa: E402
+from common import SB, log, req, rest, upload, title_for, review_for, ytdlp_json  # noqa: E402
 import find_moments as fm  # noqa: E402
 import render as rd  # noqa: E402
 import sync_audit  # noqa: E402
@@ -26,7 +26,7 @@ WORK = os.environ.get("CLIP_WORK", "/tmp/clipwork")
 SEG = 60
 MIN_SCORE = float(os.environ.get("CLIP_MIN_SCORE", "3.2"))   # combined z-score a moment needs
 KEEP_SCORE = float(os.environ.get("CLIP_KEEP_SCORE", 6))
-AUTO_APPROVE_SCORE = 8.0
+AUTO_APPROVE_SCORE = 8.5
 MAX_PER_HOUR = int(os.environ.get("CLIP_MAX_PER_HOUR", "6"))
 
 
@@ -140,7 +140,9 @@ def make_clip(row, src, peak_in_src, t_abs, sc, why, capture_start=None):
     # The reviewer's better_title is only a suggestion shown on the site: it once renamed "Lucia" to "Lucy".
     settings = {r["key"]: r["value"] for r in (rest("GET", "clip_settings?select=key,value") or [])}
     keep = (rv is None) or (rv.get("keep") and float(rv.get("score", 0)) >= KEEP_SCORE)
-    status = "skipped" if not keep else ("approved" if settings.get("auto_approve") is True and float(rv.get("score", 0)) >= AUTO_APPROVE_SCORE else "ready")
+    auto_score = float(settings.get("auto_approve_score") or AUTO_APPROVE_SCORE)
+    top = rv is not None and float(rv.get("score", 0)) >= auto_score            # 8.5+: passes instantly and gets a posting slot
+    status = "skipped" if not keep else ("approved" if top or settings.get("auto_approve") is True and float(rv.get("score", 0)) >= AUTO_APPROVE_SCORE else "ready")
     out = os.path.join(WORK, f"clip_{t_abs}.mp4")
     info = rd.render(src, peak_in_src, out, title, words=words)
     thumb = out.replace(".mp4", ".jpg")
@@ -153,6 +155,12 @@ def make_clip(row, src, peak_in_src, t_abs, sc, why, capture_start=None):
         "src_pos": (row["_pos_base"] + t_abs) if row.get("_pos_base") is not None else None}],
         prefer="resolution=merge-duplicates,return=minimal")
     log(f"  clip {t_abs}s → {title} ({info['duration']}s, {info['layout']}) review {rv.get('score') if rv else '-'} → {status}")
+    if status == "approved":
+        try:  # put it in the next free 7am / 7pm slot right away
+            r = req("POST", f"{SB}/functions/v1/clips/autofill", {"days": 14}, timeout=60)
+            log(f"  scheduled: {r}")
+        except Exception as e:  # noqa: BLE001
+            log("  autofill failed:", e)
     return v
 
 

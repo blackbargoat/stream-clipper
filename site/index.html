@@ -8,7 +8,7 @@
 <link rel="icon" href="refs/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=Geist+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="app.css?v=9">
+<link rel="stylesheet" href="app.css?v=10">
 </head>
 <body>
 <div class="bg" aria-hidden="true"><canvas id="dots"></canvas>
@@ -58,6 +58,10 @@
     </div>
   </section>
 
+  <div class="sortbar" id="sortbar">
+    <span class="lbl-s" style="margin:0">Sort</span>
+    <div class="viewtog" id="sortTog"><button type="button" data-sort="new" aria-pressed="true">Newest</button><button type="button" data-sort="top" aria-pressed="false">Top rated</button></div>
+  </div>
   <section class="slots" id="slots" aria-live="polite"></section>
 
   <section class="planner glass" id="planner" hidden aria-label="Content planner">
@@ -226,6 +230,7 @@ function renderHero() {
   const max = Math.max(1, ...rows.map((r) => r[2]));
   $("#pipeline").innerHTML = rows.map(([k, sub, v, go]) => `<${go ? `button type="button" data-go="${go}"` : "div"} class="stage ${go && go === F ? "here" : ""}"><span><em>${k}<small>${sub}</small></em><b>${v}</b></span><div class="bar"><i style="width:${(100 * v / max).toFixed(0)}%"></i></div></${go ? "button" : "div"}>`).join("");
 }
+let SORT = (() => { try { return localStorage.getItem("clipora-sort") || "new"; } catch { return "new"; } })();
 let hiddenTiles = new Set((() => { try { return JSON.parse(localStorage.getItem("clipdesk-hidden") || "[]"); } catch { return []; } })());
 const saveHidden = () => { try { localStorage.setItem("clipdesk-hidden", JSON.stringify([...hiddenTiles])); } catch {} };
 function renderLive() {
@@ -270,6 +275,7 @@ function tick() {
 }
 function renderSlots() {
   const list = D.clips.filter((c) => bucket(c) === F);
+  if (SORT === "top") list.sort((a, z) => (z.review_score ?? -1) - (a.review_score ?? -1) || (z.score ?? 0) - (a.score ?? 0));
   $("#slots").innerHTML = list.map((c) => {
     const b = bucket(c), who = srcOf(streamOf(c))?.name || "";
     return `<article class="card glass" data-id="${esc(c.id)}" tabindex="0">
@@ -285,7 +291,8 @@ function renderSlots() {
 }
 function render() {
   const planning = F === "plan";
-  $("#slots").hidden = planning; $("#planner").hidden = !planning;
+  $("#slots").hidden = planning; $("#planner").hidden = !planning; $("#sortbar").hidden = planning;
+  $("#sortTog").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.sort === SORT));
   if (planning) renderPlanner();
   document.querySelectorAll("#tabs button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.f === F));
   renderHero(); renderLive(); if (!planning) renderSlots(); renderConn(); renderChannels();
@@ -339,6 +346,7 @@ function renderChannels() {
 function openAdd(focus) { $("#scrim").hidden = false; $("#addSheet").hidden = false; $("#addNote").textContent = ""; setTimeout(() => $(focus).focus(), 50); }
 
 $("#pipeline").addEventListener("click", (e) => { const b = e.target.closest("[data-go]"); if (b) { F = b.dataset.go; render(); $("#slots").scrollIntoView({ behavior: "smooth", block: "start" }); } });
+$("#sortTog").addEventListener("click", (e) => { const b = e.target.closest("[data-sort]"); if (!b) return; SORT = b.dataset.sort; try { localStorage.setItem("clipora-sort", SORT); } catch {} firstCards = false; render(); });
 $("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { F = b.dataset.f; render(); } });
 $("#slots").addEventListener("click", async (e) => {
   const q = e.target.closest("[data-q]"), c = e.target.closest("[data-id]");
