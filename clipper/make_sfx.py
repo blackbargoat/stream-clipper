@@ -46,3 +46,17 @@ snap = (rng.standard_normal(len(T)) - lowpass(rng.standard_normal(len(T)), 0.2))
 ping = np.sin(2 * np.pi * 1900 * T) * np.exp(-T * 22) * 0.4
 save("hit.wav", snap + ping, width=0.4)
 print("ok")
+
+# DING (0.9 s): bright bell for a green "good" flash: inharmonic partials with fast attack and long decay
+T = t(0.9)
+f0 = 1568.0
+bell = sum(a * np.sin(2 * np.pi * f0 * r * T) * np.exp(-T * d) for r, a, d in ((1, 1.0, 5.0), (2.0, 0.45, 7.0), (2.76, 0.3, 9.0), (5.4, 0.12, 14.0)))
+bell *= np.minimum(1, T / 0.004)
+save("ding.wav", bell, width=0.3)
+
+# BUZZ (0.45 s): low "wrong" buzzer for a red "bad" flash
+T = t(0.45)
+sq = np.sign(np.sin(2 * np.pi * 116 * T)) * 0.6 + np.sign(np.sin(2 * np.pi * 123 * T)) * 0.4
+buzz = lowpass(sq, 0.25) * np.minimum(1, T / 0.01) * np.minimum(1, (T[-1] - T) / 0.06)
+save("buzz.wav", buzz, width=0.15)
+print("ding/buzz ok")

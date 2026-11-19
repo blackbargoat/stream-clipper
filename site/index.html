@@ -156,6 +156,7 @@
     <p class="note" style="font-size:13px">Clipora posts through Buffer. Turn on Auto-post and every clip you approve goes out on that account by itself.</p>
     <div class="conn" id="chanList"></div>
     <a class="btn glass-btn" href="https://publish.buffer.com/channels/connect" target="_blank" rel="noopener" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Connect TikTok, Instagram or another account</span></a>
+    <div class="conn"><div><span style="display:grid;gap:2px"><span>Clipping</span><em>Watch your creators and clip them when they go live</em></span><button class="tog" type="button" id="clipToggle" aria-pressed="false">Off</button></div></div>
     <div class="conn"><div><span style="display:grid;gap:2px"><span>Auto-approve</span><em>Skip review: every clip posts without you tapping Post</em></span><button class="tog" type="button" id="autoApprove" aria-pressed="false">Off</button></div></div>
     <p class="note" id="connNote"></p>
   </div>
@@ -204,6 +205,7 @@ function tilt(nodes) {
 }
 
 function embedUrl(url) {
+  if (url.startsWith("ytchannel:")) return `https://www.youtube.com/embed/live_stream?channel=${url.slice(10)}&autoplay=1&mute=1&playsinline=1`;
   const yt = url.match(/(?:v=|youtu\.be\/|\/live\/)([\w-]{11})/);
   if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1&mute=1&playsinline=1`;
   const tw = url.match(/twitch\.tv\/(\w+)/);
@@ -233,8 +235,19 @@ function renderHero() {
 let SORT = (() => { try { return localStorage.getItem("clipora-sort") || "new"; } catch { return "new"; } })();
 let hiddenTiles = new Set((() => { try { return JSON.parse(localStorage.getItem("clipdesk-hidden") || "[]"); } catch { return []; } })());
 const saveHidden = () => { try { localStorage.setItem("clipdesk-hidden", JSON.stringify([...hiddenTiles])); } catch {} };
+// one tile per creator you watch (max 3): their live player shows whenever they are live, clipping or not
+function creatorTiles() {
+  const on = D.sources.filter((x) => x.enabled !== false).slice(0, 3);
+  return on.map((src) => {
+    const cap = D.streams.find((st) => st.source_id === src.id && isLive(st));
+    if (cap) return { ...cap, clipping: true };
+    const url = src.platform === "twitch" ? `https://www.twitch.tv/${src.handle.replace(/^@/, "")}`
+      : src.yt_channel_id ? `ytchannel:${src.yt_channel_id}` : `https://www.youtube.com/${src.handle}/live`;
+    return { id: "src-" + src.id, source_id: src.id, url, title: src.name, status: "watching", checked_to: 0, clipping: false };
+  });
+}
 function renderLive() {
-  const live = D.streams.filter(isLive).slice(0, 3);
+  const live = creatorTiles();
   const shown = live.filter((s) => !hiddenTiles.has(s.id)), hid = live.length - shown.length;
   const multi = $("#multi");
   multi.dataset.n = shown.length;
@@ -248,7 +261,7 @@ function renderLive() {
     if (!t) {
       const u = embedUrl(s.url), who = esc(srcOf(s)?.name || "Live");
       multi.insertAdjacentHTML("beforeend", `<div class="tile" data-id="${esc(s.id)}">
-        <div class="screen"><div class="badge"><span class="pill blue">Live</span><span class="pill">${who}</span></div>
+        <div class="screen"><div class="badge"><span class="pill ${s.clipping ? "blue" : ""}">${s.clipping ? "Clipping" : "Live player"}</span><span class="pill">${who}</span></div>
           <button class="btn icon close-tile" data-hide="${esc(s.id)}" aria-label="Close ${who}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
           ${u ? `<iframe src="${esc(u)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${who} live"></iframe>` : `<div class="off"><b>Can't show this stream here</b></div>`}</div>
         <div class="tile-info"><b class="t-title"></b><div class="stage"><span><em class="t-stats"></em><b class="mono t-next">-</b></span><div class="bar"><i class="t-bar" style="width:0"></i></div></div></div></div>`);
@@ -256,7 +269,8 @@ function renderLive() {
     }
     const found = D.clips.filter((c) => c.stream_id === s.id).length;
     t.querySelector(".t-title").textContent = s.title || s.url;
-    t.querySelector(".t-stats").textContent = `${tc(s.checked_to)} scanned · ${found} clip${found === 1 ? "" : "s"} · next scan`;
+    t.querySelector(".t-stats").textContent = s.clipping ? `${tc(s.checked_to)} scanned · ${found} clip${found === 1 ? "" : "s"} · next scan`
+      : (D.settings?.clipping_enabled === false ? "Clipping paused · stream shows when live" : "Waiting for them to go live");
   }
   $("#liveChips").innerHTML = live.length
     ? live.map((s) => `<span class="chip ${hiddenTiles.has(s.id) ? "" : "trial"}">${esc(srcOf(s)?.name || "Live")}</span>`).join("") + (hid ? `<button class="chip" id="showAll" type="button" style="border:0;cursor:pointer">Show ${hid} closed</button>` : "")
@@ -340,6 +354,8 @@ function renderChannels() {
   const st = D.settings || {}, ch = st.channels || [];
   const icon = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", twitter: "X" };
   $("#chanList").innerHTML = ch.map((c) => `<div><span style="display:flex;align-items:center;gap:10px;min-width:0">${c.avatar ? `<img src="${esc(c.avatar)}" alt="" style="width:30px;height:30px;border-radius:50%">` : ""}<span style="display:grid;gap:2px;min-width:0"><span>${esc(c.name)}</span><em class="on">${icon[c.service] || esc(c.service)} · connected</em></span></span><button class="tog" type="button" data-ch="${esc(c.id)}" aria-pressed="${!!c.autopost}">${c.autopost ? "Auto-post on" : "Auto-post off"}</button></div>`).join("") || `<div>No accounts connected yet</div>`;
+  const cl = st.clipping_enabled !== false;
+  $("#clipToggle").setAttribute("aria-pressed", cl); $("#clipToggle").textContent = cl ? "On" : "Off";
   const aa = st.auto_approve === true;
   $("#autoApprove").setAttribute("aria-pressed", aa); $("#autoApprove").textContent = aa ? "On" : "Off";
 }
@@ -372,6 +388,11 @@ $("#chanList").addEventListener("click", async (e) => {
   try { await call("settings", { channel: b.dataset.ch, autopost: on }); $("#connNote").textContent = on ? "Auto-post on. Approved clips go out on this account." : "Auto-post off. Nothing posts here."; load(); }
   catch { $("#connNote").textContent = "Didn't save, try again."; }
 });
+$("#clipToggle").onclick = async () => {
+  const on = $("#clipToggle").getAttribute("aria-pressed") !== "true";
+  try { await call("settings", { clipping_enabled: on }); $("#connNote").textContent = on ? "Clipping on. Your Mac starts clipping creators when they go live." : "Clipping paused. Posting keeps going."; load(); }
+  catch { $("#connNote").textContent = "Didn't save, try again."; }
+};
 $("#autoApprove").onclick = async () => {
   const on = $("#autoApprove").getAttribute("aria-pressed") !== "true";
   try { await call("settings", { auto_approve: on }); $("#connNote").textContent = on ? "Auto-approve on. Strong clips post without review." : "Auto-approve off. You approve every clip."; load(); }

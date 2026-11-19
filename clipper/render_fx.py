@@ -19,13 +19,68 @@ from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import render as rd  # noqa: E402  (probe, transcribe, pick_cut, find_cam, pick_hook, loudness)
+import render as rd  # noqa: E402  (probe, pick_cut, find_cam, pick_hook, loudness)
+import upscale  # noqa: E402
 
 W, H, FPS = 1080, 1920, 30
 BRAND = (0x59, 0xC4, 0xF8)                       # #59C4F8
 FONT = os.path.join(HERE, "fonts", "Anton-Regular.ttf")
 YUNET = os.path.join(HERE, "models", "face_detection_yunet_2023mar.onnx")
-SFX = {k: os.path.join(HERE, "sfx", f"{k}.wav") for k in ("riser", "whoosh2", "impact", "hit")}
+SFX = {k: os.path.join(HERE, "sfx", f"{k}.wav") for k in ("riser", "whoosh2", "impact", "hit", "ding", "buzz")}
+PARAKEET = os.path.join(HERE, "models", "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8")
+FN = "https://etdbjahwegsmuelcawgf.supabase.co/functions/v1/clips/"
+
+
+def transcribe_words(src):
+    """Word timings from NVIDIA Parakeet TDT (sherpa-onnx). Much tighter than Whisper's, so captions sit on the words.
+    Audio is split at the quietest point near every 20 s so no word is cut in half."""
+    import sherpa_onnx, wave
+    tmp = tempfile.mktemp(suffix=".wav")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-ac", "1", "-ar", "16000", tmp], check=True)
+    rec = sherpa_onnx.OfflineRecognizer.from_transducer(
+        encoder=os.path.join(PARAKEET, "encoder.int8.onnx"), decoder=os.path.join(PARAKEET, "decoder.int8.onnx"),
+        joiner=os.path.join(PARAKEET, "joiner.int8.onnx"), tokens=os.path.join(PARAKEET, "tokens.txt"),
+        model_type="nemo_transducer", num_threads=6)
+    with wave.open(tmp) as w:
+        sr = w.getframerate(); audio = np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32768
+    os.remove(tmp)
+    bounds, off, hop = [], 0, sr // 10
+    while off < len(audio):
+        end = off + 20 * sr
+        if end >= len(audio) - 5 * sr: end = len(audio)
+        else:
+            lo, hi = end - 4 * sr, end + 4 * sr
+            e = [float(np.mean(audio[i:i + hop] ** 2)) for i in range(lo, hi, hop)]
+            end = lo + int(np.argmin(e)) * hop + hop // 2
+        bounds.append((off, end)); off = end
+    words = []
+    for off, end in bounds:
+        chunk = audio[off:end]
+        if len(chunk) < sr // 2: continue
+        st = rec.create_stream(); st.accept_waveform(sr, chunk); rec.decode_stream(st); r = st.result
+        base = off / sr; cur = None
+        for tok, t in zip(r.tokens, r.timestamps):
+            piece = tok.replace("\u2581", " ")
+            if (tok.startswith(" ") or tok.startswith("\u2581") or cur is None) and piece.strip():
+                if cur: words.append(cur)
+                cur = {"start": round(base + t, 3), "end": round(base + t + 0.25, 3), "text": piece.strip()}
+            elif cur:
+                cur["text"] += piece.strip(); cur["end"] = round(base + t + 0.2, 3)
+        if cur: words.append(cur)
+    for a, b in zip(words, words[1:]):       # a word ends when the next one starts (no overlap)
+        a["end"] = min(a["end"], b["start"])
+    return words
+
+
+def pick_flashes(pages, creator):
+    """Ask the editor model which caption lines deserve a flash (green = good, red = bad)."""
+    import urllib.request
+    try:
+        body = json.dumps({"creator": creator, "lines": [p["text"] for p in pages]}).encode()
+        r = urllib.request.urlopen(urllib.request.Request(FN + "flashes", data=body, headers={"content-type": "application/json"}), timeout=40)
+        j = json.loads(r.read()); return [("green", i) for i in j.get("green", [])] + [("red", i) for i in j.get("red", [])]
+    except Exception as e:  # noqa: BLE001
+        print("flash pick failed:", e, file=sys.stderr); return []
 
 
 # ---------------------------------------------------------------- captions
@@ -42,7 +97,9 @@ def caption_pages(words, segs):
             end_page = (len(cur) == 3 or nxt is None or nxt["start"] - w["end"] > 0.35
                         or w["text"].strip()[-1:] in ".,!?" or len(" ".join(x["text"] for x in cur)) > 14)
             if end_page:
-                s = t_out + max(0.0, cur[0]["start"] - a); e = t_out + (min(b, (nxt["start"] if nxt else w["end"] + 0.4)) - a)
+                s = t_out + max(0.0, cur[0]["start"] - a)
+                gap_end = nxt["start"] if nxt else w["end"] + 0.35
+                e = t_out + (min(b, gap_end, w["end"] + 0.3) - a)            # stay up only while it's said (+0.3 s)
                 txt = " ".join(x["text"].strip() for x in cur).upper().strip(" .,")
                 if txt:
                     pages.append({"s": s, "e": max(e, s + 0.25), "text": txt})
@@ -66,18 +123,16 @@ def caption_image(text, size=118):
 
 
 def fit_caption(text):
-    for size in (124, 112, 100, 90, 80):
+    for size in (98, 90, 82, 74):
         img = caption_image(text, size)
         if img.shape[1] <= W - 80:
             return img
-    return caption_image(text, 72)
+    return caption_image(text, 66)
 
 
 def pop_scale(t):
-    """0 -> 1.08 -> 1.0 over 0.2 s (snappy overshoot)."""
-    if t >= 0.2: return 1.0
-    if t < 0.12: return 0.55 + (1.08 - 0.55) * (t / 0.12) ** 0.6
-    return 1.08 - 0.08 * ((t - 0.12) / 0.08)
+    """quick, clean pop: 0.82 -> 1.0 in 0.09 s (no overshoot)"""
+    return 1.0 if t >= 0.09 else 0.82 + 0.18 * (t / 0.09)
 
 
 def overlay(frame, rgba, cx, cy, scale=1.0, alpha=1.0):
@@ -118,6 +173,13 @@ def track_faces(src, segs, region, sw, sh_):
                     last = pts[-1] if pts and pts[-1] else None
             pts.append(last if i % 2 == 0 else (pts[-1] if pts else None))
     # fill gaps, then smooth hard (critically damped feel): no jitter, still follows head moves
+    found = [p for p in pts if p]
+    if found:
+        xs = np.array([p[0] for p in found]); ys = np.array([p[1] for p in found])
+        moving = (np.percentile(xs, 90) - np.percentile(xs, 10)) > rw * 0.08 or (np.percentile(ys, 90) - np.percentile(ys, 10)) > rh * 0.08
+        if not moving:   # streamer sits still: no tracking, lock the crop on where the face usually is
+            med = (float(np.median(xs)), float(np.median(ys)), float(np.median([p[2] for p in found])))
+            return [np.array(med)] * len(pts)
     first = next((p for p in pts if p), (rx + rw / 2, ry + rh / 2, rw / 3))
     out, cur = [], np.array(first, dtype=np.float64)
     for p in pts:
@@ -128,9 +190,9 @@ def track_faces(src, segs, region, sw, sh_):
 
 
 # ---------------------------------------------------------------- render
-def render(src, peak, out, title=None, model="base.en", words=None):
+def render(src, peak, out, title=None, model="base.en", words=None, creator="the streamer"):
     sw, sh_, dur = rd.probe(src)
-    words = words if words is not None else rd.transcribe(src, model)
+    words = words if words is not None else transcribe_words(src)
     start, end = rd.pick_cut(words, peak, dur)
     cam = rd.find_cam(src, sw, sh_, dur)
     hk = rd.pick_hook(src, words, start, end)
@@ -161,6 +223,7 @@ def render(src, peak, out, title=None, model="base.en", words=None):
 
     pages = caption_pages(words, segs)
     page_imgs = [fit_caption(p["text"]) for p in pages]
+    flashes = [(k, pages[i]["s"]) for k, i in pick_flashes(pages, creator) if 0 <= i < len(pages)]
     tmp = tempfile.mkdtemp()
     title_png = None
     if title:
@@ -195,8 +258,8 @@ def render(src, peak, out, title=None, model="base.en", words=None):
                 cwid = bw / zoom; chei = cwid * ch / W
                 cx0 = min(max(fx - cwid / 2, bx), bx + bw - cwid); cy0 = min(max(fy - chei * 0.45, by), by + bh - chei)
                 camc = src_f[int(cy0):int(cy0 + chei), int(cx0):int(cx0 + cwid)]
-                up = cv2.resize(camc, (W, ch), interpolation=cv2.INTER_LANCZOS4)
-                frame[:ch] = cv2.addWeighted(up, 1.45, cv2.GaussianBlur(up, (0, 0), 2.2), -0.45, 0)   # unsharp mask
+                big = upscale.upscale4(np.ascontiguousarray(camc[..., ::-1]))[..., ::-1]     # AI 4x (Real-ESRGAN), BGR in/out
+                frame[:ch] = cv2.resize(big, (W, ch), interpolation=cv2.INTER_AREA)
                 gw = int(sh_ * W / gh); gx = int(min(max((sw - gw) / 2, 0), sw - gw))
                 frame[ch:] = cv2.resize(src_f[:, gx:gx + gw], (W, gh), interpolation=cv2.INTER_AREA)
                 cap_y = ch
@@ -207,11 +270,11 @@ def render(src, peak, out, title=None, model="base.en", words=None):
                 frame[:] = cv2.resize(src_f[int(cy0):int(cy0 + chei), int(cx0):int(cx0 + cwid)], (W, H), interpolation=cv2.INTER_LANCZOS4)
                 cap_y = int(H * 0.66)
             # flashes: green on the hook->clip cut, red on the peak (fast attack, 0.25 s fade)
-            for ft, col in ((cut_t, (60, 220, 90)), (peak_t, (40, 40, 235))):
-                if ft is None: continue
+            for kind, ft in flashes:
                 d = t - ft
-                if 0 <= d < 0.25:
-                    a_ = 0.42 * (1 - d / 0.25)
+                if 0 <= d < 0.85:   # 0.1 s in, hold, fade out by 0.85 s
+                    a_ = 0.34 * min(1.0, d / 0.1) * (1.0 if d < 0.55 else max(0.0, 1 - (d - 0.55) / 0.3))
+                    col = (70, 215, 80) if kind == "green" else (45, 45, 230)
                     frame[:] = (frame.astype(np.float32) * (1 - a_) + np.array(col, np.float32) * a_).astype(np.uint8)
             if title_png is not None:
                 overlay(frame, title_png, W / 2, H / 2)
@@ -235,20 +298,21 @@ def render(src, peak, out, title=None, model="base.en", words=None):
         nonlocal_graph.append(f"[{k}:a]adelay={int(at * 1000)}:all=1,volume={vol}[s{k}];"); mix.append(f"[s{k}]")
     nonlocal_graph = []
     if cut_t is not None:
-        add("riser", cut_t - 1.6, 0.45); add("whoosh2", max(0, cut_t - 0.25), 0.6); add("hit", cut_t, 0.5)
-    add("impact", peak_t, 0.7); add("hit", peak_t, 0.45)
+        add("riser", cut_t - 1.6, 0.4); add("whoosh2", max(0, cut_t - 0.25), 0.55)
+    for kind, ft in flashes:
+        add("ding" if kind == "green" else "buzz", ft, 0.55 if kind == "green" else 0.45)
     graph += "".join(nonlocal_graph) + "".join(mix) + f"amix=inputs={len(mix)}:duration=first:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[aout]"
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, *sfx_in, "-i", silent, "-filter_complex", graph,
                     "-map", f"{len(sfx_in) // 2 + 1}:v", "-map", "[aout]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
                     "-shortest", "-movflags", "+faststart", out], check=True)
     text = " ".join(w["text"] for w in words if start <= w["start"] <= end)
     return {"start": start, "end": end, "hook": hk, "duration": round(total, 1), "layout": layout, "peak_t": round(peak_t, 2),
-            "cut_t": cut_t, "captions": len(pages), "transcript": text}
+            "cut_t": cut_t, "captions": len(pages), "flashes": [(k, round(t, 2), pages[[p["s"] for p in pages].index(t)]["text"]) for k, t in flashes], "transcript": text}
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--src", required=True); p.add_argument("--peak", type=float, required=True); p.add_argument("--out", required=True)
-    p.add_argument("--title"); p.add_argument("--model", default="base.en")
+    p.add_argument("--title"); p.add_argument("--model", default="base.en"); p.add_argument("--creator", default="the streamer")
     a = p.parse_args()
-    print(json.dumps(render(a.src, a.peak, a.out, a.title, a.model), indent=1, default=str))
+    print(json.dumps(render(a.src, a.peak, a.out, a.title, a.model, creator=a.creator), indent=1, default=str))

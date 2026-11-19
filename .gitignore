@@ -1,3 +1,10 @@
 .post-key
 .worker-key
 .site-password
+.env.local
+
+# big local-only files (models, tools)
+clipper/models/
+tools/
+*.onnx
+*.zip
