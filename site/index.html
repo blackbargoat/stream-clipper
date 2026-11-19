@@ -450,8 +450,9 @@ function renderPlanner() {
   }).join("")).join("");
   $("#cal").style.gridTemplateColumns = `72px repeat(7, minmax(110px, 1fr))`;
   $("#cal").innerHTML = head + rows;
-  const ready = D.clips.filter((c) => !c.slot_at && (c.status === "approved" || (c.status === "ready" && (c.review_score ?? 0) >= 6)));
-  $("#tray").innerHTML = ready.map((c) => `<div class="mini tray-item ${pickId === c.id ? "picked" : ""}" draggable="true" data-clip-id="${esc(c.id)}"><img src="${esc(c.thumb_url)}" alt=""><span>${esc(c.title)}</span><i>${c.status === "approved" ? "Approved" : "AI " + Number(c.review_score).toFixed(1)}</i></div>`).join("")
+  const ready = D.clips.filter((c) => !c.slot_at && (c.status === "approved" || (c.status === "ready" && (c.review_score ?? 0) >= 6)))
+    .sort((a, z) => (z.status === "approved") - (a.status === "approved") || (z.review_score ?? 0) - (a.review_score ?? 0));  // your approved clips first
+  $("#tray").innerHTML = ready.map((c) => `<div class="mini tray-item ${pickId === c.id ? "picked" : ""}" draggable="true" data-clip-id="${esc(c.id)}"><img src="${esc(c.thumb_url)}" alt=""><span>${esc(c.title)}</span><i>${c.status === "approved" ? "✓ Approved by you" : "AI pick " + Number(c.review_score).toFixed(1)}</i></div>`).join("")
     || `<p class="note">Nothing waiting. Approve clips in "Needs your OK", or they show up here once the AI rates them 6 or higher.</p>`;
   $("#planNote").textContent = pickId ? "Now tap an empty slot to put it there." : extra.length ? `${extra.length} clip(s) are scheduled at times outside your posting times.` : "Drag clips into time slots, or tap a clip then a slot. They post at that time.";
 }
